@@ -27,51 +27,79 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ ok: false, error: "No active tab" });
         return;
       }
-      
+
       // Check if content script is loaded, inject if needed
-      chrome.tabs.sendMessage(tab.id, { type: "START_REGION_SELECTION" }, (response) => {
-        if (chrome.runtime.lastError) {
-          // Content script might not be loaded, try to inject it
-          console.log("Content script not loaded, injecting...");
-          chrome.scripting.executeScript({
-            target: { tabId: tab.id },
-            files: ['src/contentScript.js']
-          }, () => {
-            if (chrome.runtime.lastError) {
-              console.error("Failed to inject content script:", chrome.runtime.lastError);
-              sendResponse({ ok: false, error: "Cannot inject content script. Make sure you're on a web page, not a chrome:// page." });
-            } else {
-              // Wait a bit then try again
-              setTimeout(() => {
-                chrome.tabs.sendMessage(tab.id, { type: "START_REGION_SELECTION" });
-              }, 100);
-            }
-          });
+      chrome.tabs.sendMessage(
+        tab.id,
+        { type: "START_REGION_SELECTION" },
+        (response) => {
+          if (chrome.runtime.lastError) {
+            // Content script might not be loaded, try to inject it
+            console.log("Content script not loaded, injecting...");
+            chrome.scripting.executeScript(
+              {
+                target: { tabId: tab.id },
+                files: ["src/contentScript.js"],
+              },
+              () => {
+                if (chrome.runtime.lastError) {
+                  console.error(
+                    "Failed to inject content script:",
+                    chrome.runtime.lastError
+                  );
+                  sendResponse({
+                    ok: false,
+                    error:
+                      "Cannot inject content script. Make sure you're on a web page, not a chrome:// page.",
+                  });
+                } else {
+                  // Wait a bit then try again
+                  setTimeout(() => {
+                    chrome.tabs.sendMessage(tab.id, {
+                      type: "START_REGION_SELECTION",
+                    });
+                  }, 100);
+                }
+              }
+            );
+          }
         }
-      });
+      );
     });
     sendResponse({ ok: true });
     return true;
   }
 
   if (message.type === "REGION_SELECTED") {
-    const { x, y, width, height } = message.region;
-    
-    // Capture full screen then let popup crop it
-    chrome.tabs.captureVisibleTab(null, { format: "png" }, (dataUrl) => {
-      if (chrome.runtime.lastError || !dataUrl) {
-        console.error(chrome.runtime.lastError);
-        return;
-      }
+    const { x, y, width, height, scale = 1 } = message.region;
 
-      // Forward result to popup
-      chrome.runtime.sendMessage({
-        type: "SCREENSHOT_CAPTURED",
-        mode: "region",
-        dataUrl,
-        region: { x, y, width, height }
+    // Wait a bit longer to ensure overlay is fully removed from DOM
+    setTimeout(() => {
+      chrome.tabs.captureVisibleTab(null, { format: "png" }, (dataUrl) => {
+        if (chrome.runtime.lastError || !dataUrl) {
+          console.error("captureVisibleTab error:", chrome.runtime.lastError);
+          return;
+        }
+
+        const region = { x, y, width, height, scale };
+
+        // Save in storage so popup can pick it up later
+        chrome.storage.local.set({
+          lastScreenshot: dataUrl,
+          lastScreenshotRegion: region,
+          pendingScreenshot: true,
+        });
+
+        // Also notify any open popup immediately (if it's still open)
+        chrome.runtime.sendMessage({
+          type: "SCREENSHOT_CAPTURED",
+          mode: "region",
+          dataUrl,
+          region,
+        });
       });
-    });
+    }, 200); // Allow overlay cleanup before capture
+
     return true;
   }
 

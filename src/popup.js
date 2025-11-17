@@ -9,6 +9,7 @@ import { apiLogin, apiSignup } from './api.js';
 // View containers
 const authView = document.getElementById('auth-view');
 const dashboardView = document.getElementById('dashboard-view');
+const regionSelectionView = document.getElementById('region-selection-view');
 const screenshotPreviewView = document.getElementById('screenshot-preview-view');
 const manualFormView = document.getElementById('manual-form-view');
 
@@ -96,15 +97,57 @@ async function init() {
  */
 async function checkForPendingScreenshot() {
   try {
-    const result = await chrome.storage.local.get(['lastScreenshot', 'pendingScreenshot']);
-    if (result.pendingScreenshot && result.lastScreenshot) {
-      // There's a pending screenshot, show the preview
-      showScreenshotPreview(result.lastScreenshot);
-      // Clear the pending flag
+    const result = await chrome.storage.local.get(['lastScreenshot', 'pendingScreenshot', 'lastScreenshotRegion']);
+    console.log("Checking for pending screenshot:", {
+      hasPending: result.pendingScreenshot,
+      hasScreenshot: !!result.lastScreenshot,
+      hasRegion: !!result.lastScreenshotRegion,
+      screenshotLength: result.lastScreenshot?.length
+    });
+    
+    const hasPending = result.pendingScreenshot && result.lastScreenshot;
+
+    if (!hasPending) {
+      if (result.lastScreenshot) {
+        lastScreenshotDataUrl = result.lastScreenshot;
+      }
+      return;
+    }
+
+    const region = result.lastScreenshotRegion;
+
+    if (region && region.width && region.height) {
+      console.log("Processing region screenshot with region:", region);
+      cropDataUrlToRegion(result.lastScreenshot, region, (cropped) => {
+        console.log("Crop callback received:", { 
+          cropped: !!cropped, 
+          croppedLength: cropped?.length,
+          usingFallback: !cropped 
+        });
+        
+        const finalImage = cropped || result.lastScreenshot;
+        
+        if (!finalImage) {
+          console.error("No image to preview!");
+          alert("Failed to process screenshot. Please try again.");
+          return;
+        }
+        
+        // Store the cropped image
+        chrome.storage.local.set({ 
+          lastScreenshot: finalImage,
+          pendingScreenshot: false // Clear pending flag
+        });
+        chrome.storage.local.remove(['lastScreenshotRegion']);
+        
+        showScreenshotPreview(finalImage);
+      });
+    } else {
+      console.log("Processing fullscreen screenshot");
+      if (result.lastScreenshot) {
+        showScreenshotPreview(result.lastScreenshot);
+      }
       chrome.storage.local.remove('pendingScreenshot');
-    } else if (result.lastScreenshot) {
-      // Just restore the last screenshot in case user wants to use it
-      lastScreenshotDataUrl = result.lastScreenshot;
     }
   } catch (error) {
     console.error("Error checking for pending screenshot:", error);
@@ -117,6 +160,7 @@ async function checkForPendingScreenshot() {
 function showAuthView() {
   authView.classList.remove('hidden');
   dashboardView.classList.add('hidden');
+  regionSelectionView.classList.add('hidden');
   screenshotPreviewView.classList.add('hidden');
   manualFormView.classList.add('hidden');
 }
@@ -132,6 +176,7 @@ async function showDashboardView() {
   
   authView.classList.add('hidden');
   dashboardView.classList.remove('hidden');
+  regionSelectionView.classList.add('hidden');
   screenshotPreviewView.classList.add('hidden');
   manualFormView.classList.add('hidden');
   
@@ -144,14 +189,35 @@ async function showDashboardView() {
  * @param {string} dataUrl - Screenshot data URL
  */
 function showScreenshotPreview(dataUrl) {
+  console.log("Showing screenshot preview:", { 
+    dataUrlLength: dataUrl?.length,
+    hasDataUrl: !!dataUrl 
+  });
+  
+  if (!dataUrl) {
+    console.error("No data URL provided to showScreenshotPreview!");
+    alert("Screenshot data is missing. Please try again.");
+    return;
+  }
+  
   authView.classList.add('hidden');
   dashboardView.classList.add('hidden');
+  regionSelectionView.classList.add('hidden');
   screenshotPreviewView.classList.remove('hidden');
   manualFormView.classList.add('hidden');
   
-  // Set preview image
+  // Set preview image with error handling
+  screenshotPreviewImage.onload = () => {
+    console.log("Preview image loaded successfully");
+    lastScreenshotDataUrl = dataUrl;
+  };
+  
+  screenshotPreviewImage.onerror = (error) => {
+    console.error("Preview image failed to load:", error);
+    alert("Failed to load screenshot preview. Please try again.");
+  };
+  
   screenshotPreviewImage.src = dataUrl;
-  lastScreenshotDataUrl = dataUrl;
 }
 
 /**
@@ -162,6 +228,7 @@ function showScreenshotPreview(dataUrl) {
 function showManualFormView({ fromScreenshot = false }) {
   authView.classList.add('hidden');
   dashboardView.classList.add('hidden');
+  regionSelectionView.classList.add('hidden');
   screenshotPreviewView.classList.add('hidden');
   manualFormView.classList.remove('hidden');
   
@@ -177,6 +244,7 @@ function showManualFormView({ fromScreenshot = false }) {
   // Clear form error
   formError.classList.add('hidden');
 }
+
 
 /**
  * Handle login form submission
@@ -320,6 +388,7 @@ function handleScreenshotFull(e) {
         // Store in chrome.storage.local
         chrome.storage.local.set({ 
           lastScreenshot: response.dataUrl,
+          lastScreenshotRegion: null,
           pendingScreenshot: true 
         });
         // Show preview instead of going directly to form
@@ -338,6 +407,45 @@ function handleScreenshotFull(e) {
 }
 
 /**
+ * Show region selection message view
+ */
+function showRegionSelectionMessage() {
+  authView.classList.add('hidden');
+  dashboardView.classList.add('hidden');
+  screenshotPreviewView.classList.add('hidden');
+  manualFormView.classList.add('hidden');
+  regionSelectionView.classList.remove('hidden');
+  
+  // Start region selection immediately on the page (before closing popup)
+  chrome.runtime.sendMessage(
+    { type: "TAKE_REGION_SCREENSHOT" },
+    (response) => {
+      if (chrome.runtime.lastError) {
+        console.error("Region screenshot error:", chrome.runtime.lastError);
+        alert("Failed to start region selection: " + chrome.runtime.lastError.message);
+        return;
+      }
+      
+      if (response && response.ok) {
+        // Mark as pending so we can show preview when popup reopens
+        chrome.storage.local.set({ pendingScreenshot: true });
+        
+        // Start progress bar animation
+        const progressBar = document.getElementById('region-progress-bar');
+        progressBar.classList.add('animating');
+        
+        // After 1 second, close popup (overlay is already showing on the page)
+        setTimeout(() => {
+          window.close();
+        }, 1000);
+      } else {
+        alert("Failed to start region selection: " + (response?.error || "Unknown error"));
+      }
+    }
+  );
+}
+
+/**
  * Handle region screenshot
  */
 function handleScreenshotRegion(e) {
@@ -348,94 +456,167 @@ function handleScreenshotRegion(e) {
   
   screenshotOptions.classList.add('hidden');
   
-  // Show loading state
-  const originalText = btnScreenshotRegion.textContent;
-  btnScreenshotRegion.disabled = true;
-  btnScreenshotRegion.textContent = 'Preparing...';
-  
-  chrome.runtime.sendMessage(
-    { type: "TAKE_REGION_SCREENSHOT" },
-    (response) => {
-      btnScreenshotRegion.disabled = false;
-      btnScreenshotRegion.textContent = originalText;
-      
-      if (chrome.runtime.lastError) {
-        console.error("Region screenshot error:", chrome.runtime.lastError);
-        alert("Failed to start region selection: " + chrome.runtime.lastError.message);
-        return;
-      }
-      
-      if (response && response.ok) {
-        // Region selection will be handled by content script
-        // Mark as pending so we can show form when popup reopens
-        chrome.storage.local.set({ pendingScreenshot: true });
-        // Popup will close naturally, user will select region on page
-        // When they reopen popup, checkForPendingScreenshot will handle it
-        // But we also listen for SCREENSHOT_CAPTURED in case popup is still open
-      } else {
-        alert("Failed to start region selection: " + (response?.error || "Unknown error"));
-      }
-    }
-  );
+  // Show region selection message view with progress bar
+  showRegionSelectionMessage();
 }
 
 /**
  * Handle screenshot captured (from background)
  */
 function handleScreenshotCaptured(message) {
-  console.log("Screenshot captured:", message.mode);
+  console.log("Screenshot captured:", message.mode, message.region ? "with region" : "fullscreen");
   
   if (message.mode === "region" && message.region) {
     // Crop the full screenshot to the selected region
+    console.log("Cropping region screenshot with region:", message.region);
     cropDataUrlToRegion(message.dataUrl, message.region, (croppedDataUrl) => {
+      console.log("Region crop complete:", {
+        cropped: !!croppedDataUrl,
+        croppedLength: croppedDataUrl?.length,
+        usingFallback: !croppedDataUrl
+      });
+      
       const finalDataUrl = croppedDataUrl || message.dataUrl; // Fallback to full if crop fails
+      
+      // Store the cropped image
       chrome.storage.local.set({ 
         lastScreenshot: finalDataUrl,
-        pendingScreenshot: true 
+        pendingScreenshot: false // Clear pending since we're showing it now
       });
-      // Show preview instead of going directly to form
-      showScreenshotPreview(finalDataUrl);
+      chrome.storage.local.remove(['lastScreenshotRegion']);
+      
+      // Show preview
+      if (finalDataUrl) {
+        showScreenshotPreview(finalDataUrl);
+      } else {
+        console.error("No cropped image to show!");
+        alert("Failed to process screenshot. Please try again.");
+      }
     });
   } else {
     // Fullscreen screenshot
+    console.log("Showing fullscreen screenshot");
     chrome.storage.local.set({ 
       lastScreenshot: message.dataUrl,
-      pendingScreenshot: true 
+      pendingScreenshot: false 
     });
-    // Show preview instead of going directly to form
+    chrome.storage.local.remove(['lastScreenshotRegion']);
+    // Show preview
     showScreenshotPreview(message.dataUrl);
   }
 }
 
 /**
  * Crop data URL to region
+ * Accounts for device pixel ratio and ensures clean cropping
  */
 function cropDataUrlToRegion(fullDataUrl, region, callback) {
+  console.log("Starting crop with:", { 
+    dataUrlLength: fullDataUrl?.length,
+    region: region 
+  });
+  
+  if (!fullDataUrl || !region) {
+    console.error("Missing data for cropping:", { fullDataUrl: !!fullDataUrl, region: !!region });
+    callback(null);
+    return;
+  }
+  
   const img = new Image();
+  
   img.onload = () => {
     try {
+      // Get the actual image dimensions
+      const imgWidth = img.width;
+      const imgHeight = img.height;
+      
+      console.log("Image loaded:", { 
+        imgWidth, 
+        imgHeight, 
+        region,
+        devicePixelRatio: window.devicePixelRatio || 1
+      });
+      
+      // Chrome's captureVisibleTab returns image at devicePixelRatio scale
+      // The region coordinates are in viewport pixels (not scaled)
+      // We need to scale region coordinates to match screenshot pixel dimensions
+      const scale = region.scale || window.devicePixelRatio || 1;
+      
+      // Calculate the actual scale by comparing screenshot dimensions to expected viewport size
+      // We can infer viewport size from screenshot dimensions divided by scale
+      const estimatedViewportWidth = imgWidth / scale;
+      const estimatedViewportHeight = imgHeight / scale;
+      
+      // Use the scale factor directly (it's already the devicePixelRatio from content script)
+      const cropX = Math.round(region.x * scale);
+      const cropY = Math.round(region.y * scale);
+      const cropWidth = Math.round(region.width * scale);
+      const cropHeight = Math.round(region.height * scale);
+      
+      // Ensure we don't go out of bounds
+      const finalX = Math.max(0, Math.min(cropX, imgWidth));
+      const finalY = Math.max(0, Math.min(cropY, imgHeight));
+      const finalWidth = Math.min(cropWidth, imgWidth - finalX);
+      const finalHeight = Math.min(cropHeight, imgHeight - finalY);
+      
+      // Ensure minimum dimensions
+      if (finalWidth <= 0 || finalHeight <= 0) {
+        console.error("Invalid crop dimensions:", { finalX, finalY, finalWidth, finalHeight });
+        callback(null);
+        return;
+      }
+      
+      console.log("Crop calculations:", {
+        scale,
+        estimatedViewportWidth,
+        estimatedViewportHeight,
+        regionCoords: { x: region.x, y: region.y, width: region.width, height: region.height },
+        cropCoords: { cropX, cropY, cropWidth, cropHeight },
+        finalCoords: { finalX, finalY, finalWidth, finalHeight },
+        imgDimensions: { imgWidth, imgHeight }
+      });
+      
+      // Create canvas for cropped image - output at original viewport size
       const canvas = document.createElement("canvas");
       canvas.width = region.width;
       canvas.height = region.height;
       const ctx = canvas.getContext("2d");
       
+      // Set image smoothing for better quality when scaling down
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      
+      // Draw cropped region - scale down from screenshot size to viewport size
       ctx.drawImage(
         img,
-        region.x, region.y, region.width, region.height,
-        0, 0, region.width, region.height
+        finalX, finalY, finalWidth, finalHeight, // Source rectangle (from screenshot at devicePixelRatio scale)
+        0, 0, region.width, region.height // Destination rectangle (viewport size)
       );
       
       const cropped = canvas.toDataURL("image/png");
-      callback(cropped);
+      console.log("Crop successful:", { 
+        croppedLength: cropped.length,
+        outputSize: { width: region.width, height: region.height }
+      });
+      
+      if (cropped && cropped.length > 100) { // Basic validation - data URL should be substantial
+        callback(cropped);
+      } else {
+        console.error("Cropped image seems invalid (too small)");
+        callback(null);
+      }
     } catch (error) {
-      console.error("Crop error:", error);
-      callback(null); // Return null on error, will use fallback
+      console.error("Crop error:", error, error.stack);
+      callback(null);
     }
   };
-  img.onerror = () => {
-    console.error("Image load error");
+  
+  img.onerror = (error) => {
+    console.error("Image load error:", error);
     callback(null);
   };
+  
+  // Set source after error handlers are attached
   img.src = fullDataUrl;
 }
 
@@ -542,7 +723,7 @@ async function handleSaveBooking() {
     clearManualForm();
     
     // Clear pending screenshot flag
-    chrome.storage.local.remove(['pendingScreenshot', 'lastScreenshot']);
+    chrome.storage.local.remove(['pendingScreenshot', 'lastScreenshot', 'lastScreenshotRegion']);
     
     // Show success message (simple alert for now)
     // In production, could show a toast or inline message
@@ -582,7 +763,7 @@ function clearManualForm() {
   notesInput.value = '';
   formError.classList.add('hidden');
   lastScreenshotDataUrl = null;
-  chrome.storage.local.remove('lastScreenshot');
+  chrome.storage.local.remove(['lastScreenshot', 'lastScreenshotRegion']);
 }
 
 /**
@@ -692,7 +873,7 @@ function attachEventListeners() {
   btnRetakeScreenshot.addEventListener('click', async () => {
     // Clear screenshot and go back to dashboard
     lastScreenshotDataUrl = null;
-    await chrome.storage.local.remove(['lastScreenshot', 'pendingScreenshot']);
+    await chrome.storage.local.remove(['lastScreenshot', 'pendingScreenshot', 'lastScreenshotRegion']);
     await showDashboardView();
   });
   

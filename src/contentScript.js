@@ -22,7 +22,7 @@ function createRegionSelectionUI() {
   }
 
   // Create overlay with darker background
-  overlay = document.createElement('div');
+  overlay = document.createElement("div");
   overlay.style.cssText = `
     position: fixed;
     top: 0;
@@ -35,7 +35,7 @@ function createRegionSelectionUI() {
   `;
 
   // Create selection box
-  selectionBox = document.createElement('div');
+  selectionBox = document.createElement("div");
   selectionBox.style.cssText = `
     position: fixed;
     border: 2px solid #667eea;
@@ -49,18 +49,18 @@ function createRegionSelectionUI() {
   document.body.appendChild(overlay);
 
   // Mouse down - start selection
-  overlay.addEventListener('mousedown', (e) => {
+  overlay.addEventListener("mousedown", (e) => {
     e.preventDefault();
     e.stopPropagation();
     isSelectingRegion = true;
     startX = e.clientX;
     startY = e.clientY;
-    selectionBox.style.display = 'block';
+    selectionBox.style.display = "block";
     updateSelectionBox(e.clientX, e.clientY);
   });
 
   // Mouse move - update selection
-  overlay.addEventListener('mousemove', (e) => {
+  overlay.addEventListener("mousemove", (e) => {
     if (!isSelectingRegion) return;
     e.preventDefault();
     e.stopPropagation();
@@ -68,14 +68,14 @@ function createRegionSelectionUI() {
   });
 
   // Mouse up - finalize selection
-  overlay.addEventListener('mouseup', (e) => {
+  overlay.addEventListener("mouseup", (e) => {
     if (!isSelectingRegion) return;
     e.preventDefault();
     e.stopPropagation();
-    
+
     const endX = e.clientX;
     const endY = e.clientY;
-    
+
     // Calculate region
     const x = Math.min(startX, endX);
     const y = Math.min(startY, endY);
@@ -84,18 +84,30 @@ function createRegionSelectionUI() {
 
     // Only send if region is large enough (at least 50x50)
     if (width >= 50 && height >= 50) {
-      chrome.runtime.sendMessage({
-        type: "REGION_SELECTED",
-        region: { x, y, width, height }
-      });
-    }
+      // Clean up overlay FIRST before sending message (so it's not in screenshot)
+      cleanupRegionSelection();
 
-    // Clean up
-    cleanupRegionSelection();
+      // Wait a brief moment to ensure overlay is fully removed from DOM
+      setTimeout(() => {
+        chrome.runtime.sendMessage({
+          type: "REGION_SELECTED",
+          region: {
+            x,
+            y,
+            width,
+            height,
+            scale: window.devicePixelRatio || 1,
+          },
+        });
+      }, 100);
+    } else {
+      // If region too small, just clean up
+      cleanupRegionSelection();
+    }
   });
 
   // Esc key - cancel selection
-  document.addEventListener('keydown', handleEscKey, true);
+  document.addEventListener("keydown", handleEscKey, true);
 }
 
 /**
@@ -107,10 +119,10 @@ function updateSelectionBox(currentX, currentY) {
   const width = Math.abs(currentX - startX);
   const height = Math.abs(currentY - startY);
 
-  selectionBox.style.left = x + 'px';
-  selectionBox.style.top = y + 'px';
-  selectionBox.style.width = width + 'px';
-  selectionBox.style.height = height + 'px';
+  selectionBox.style.left = x + "px";
+  selectionBox.style.top = y + "px";
+  selectionBox.style.width = width + "px";
+  selectionBox.style.height = height + "px";
 }
 
 /**
@@ -123,14 +135,14 @@ function cleanupRegionSelection() {
     overlay = null;
     selectionBox = null;
   }
-  document.removeEventListener('keydown', handleEscKey, true);
+  document.removeEventListener("keydown", handleEscKey, true);
 }
 
 /**
  * Handle Esc key to cancel selection
  */
 function handleEscKey(e) {
-  if (e.key === 'Escape' && isSelectingRegion) {
+  if (e.key === "Escape" && isSelectingRegion) {
     e.preventDefault();
     e.stopPropagation();
     cleanupRegionSelection();

@@ -15,14 +15,8 @@
     "service_worker": "src/background.js",
     "type": "module"
   },
-  "permissions": [
-    "tabs",
-    "scripting",
-    "storage"
-  ],
-  "host_permissions": [
-    "*://*/*"
-  ],
+  "permissions": ["tabs", "activeTab", "scripting", "storage", "windows"],
+  "host_permissions": ["<all_urls>"],
   "icons": {
     "16": "assets/icon16.png",
     "48": "assets/icon48.png",
@@ -35,4 +29,3 @@
     }
   ]
 }
-
