@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TripLedger</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <!-- Header -->
+    <header class="header">
+      <div class="logo-placeholder">📋</div>
+      <h1 class="title">TripLedger</h1>
+    </header>
+
+    <!-- Auth Section -->
+    <section id="auth-view" class="auth-section">
+      <!-- Login View -->
+      <div id="login-view" class="auth-view">
+        <h2>Log In</h2>
+        <div class="form-group">
+          <label for="login-email">Email</label>
+          <input
+            type="email"
+            id="login-email"
+            class="input"
+            placeholder="your@email.com"
+            required
+          />
+        </div>
+        <div class="form-group">
+          <label for="login-password">Password</label>
+          <input
+            type="password"
+            id="login-password"
+            class="input"
+            placeholder="••••••••"
+            required
+          />
+        </div>
+        <button id="login-btn" class="btn btn-primary">Log in</button>
+        <button id="show-signup-btn" class="btn-link">Sign up instead</button>
+      </div>
+
+      <!-- Signup View -->
+      <div id="signup-view" class="auth-view hidden">
+        <h2>Sign Up</h2>
+        <div class="form-group">
+          <label for="signup-email">Email</label>
+          <input
+            type="email"
+            id="signup-email"
+            class="input"
+            placeholder="your@email.com"
+            required
+          />
+        </div>
+        <div class="form-group">
+          <label for="signup-password">Password</label>
+          <input
+            type="password"
+            id="signup-password"
+            class="input"
+            placeholder="••••••••"
+            required
+          />
+        </div>
+        <div class="form-group">
+          <label for="signup-confirm">Confirm Password</label>
+          <input
+            type="password"
+            id="signup-confirm"
+            class="input"
+            placeholder="••••••••"
+            required
+          />
+        </div>
+        <button id="signup-btn" class="btn btn-primary">Sign up</button>
+        <button id="show-login-btn" class="btn-link">Back to login</button>
+      </div>
+    </section>
+
+    <!-- Dashboard View (visible when logged in) -->
+    <section id="dashboard-view" class="main-section hidden">
+      <div class="greeting">Hi, <span id="user-email"></span> 👋</div>
+
+      <div class="actions">
+        <button type="button" id="btn-screenshot" class="btn btn-action">
+          Screenshot booking
+        </button>
+
+        <!-- Screenshot options dialog -->
+        <div id="screenshot-options" class="screenshot-options hidden">
+          <p>Select screenshot mode:</p>
+          <button
+            type="button"
+            id="btn-screenshot-full"
+            class="btn btn-secondary"
+          >
+            Full page
+          </button>
+          <button
+            type="button"
+            id="btn-screenshot-region"
+            class="btn btn-secondary"
+          >
+            Select area
+          </button>
+          <button type="button" id="btn-screenshot-cancel" class="btn btn-link">
+            Cancel
+          </button>
+        </div>
+
+        <button type="button" id="btn-upload" class="btn btn-action">
+          Upload file (PDF / image)
+        </button>
+        <input
+          type="file"
+          id="file-input"
+          accept=".pdf,.png,.jpg,.jpeg,.gif,.webp"
+          class="hidden"
+        />
+        <button type="button" id="btn-manual" class="btn btn-action">
+          Enter manually
+        </button>
+      </div>
+
+      <div id="recent-bookings" class="recent-bookings">
+        <h3>Recent bookings</h3>
+        <ul id="recent-bookings-list" class="bookings-list">
+          <!-- Filled dynamically -->
+        </ul>
+      </div>
+    </section>
+
+    <!-- Screenshot Preview View -->
+    <section
+      id="screenshot-preview-view"
+      class="screenshot-preview-section hidden"
+    >
+      <h2>Screenshot Preview</h2>
+      <div class="preview-container">
+        <img id="screenshot-preview-image" src="" alt="Screenshot preview" />
+      </div>
+      <div class="preview-actions">
+        <button type="button" id="btn-use-screenshot" class="btn btn-primary">
+          Use this screenshot
+        </button>
+        <button
+          type="button"
+          id="btn-retake-screenshot"
+          class="btn btn-secondary"
+        >
+          Retake
+        </button>
+      </div>
+    </section>
+
+    <!-- Manual Booking Form View -->
+    <section id="manual-form-view" class="manual-form-section hidden">
+      <h2>Add flight booking</h2>
+      <p id="screenshot-status" class="screenshot-status"></p>
+
+      <div id="manual-form-error" class="form-error hidden"></div>
+
+      <form id="manual-booking-form" class="booking-form">
+        <div class="form-group">
+          <label for="field-airline">Airline / Provider *</label>
+          <input
+            type="text"
+            id="field-airline"
+            class="input"
+            placeholder="e.g., EVA Air"
+            required
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="field-flight-number">Flight number *</label>
+          <input
+            type="text"
+            id="field-flight-number"
+            class="input"
+            placeholder="e.g., BR196"
+            required
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="field-origin">Origin (city or IATA) *</label>
+          <input
+            type="text"
+            id="field-origin"
+            class="input"
+            placeholder="e.g., TPE"
+            required
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="field-destination">Destination (city or IATA) *</label>
+          <input
+            type="text"
+            id="field-destination"
+            class="input"
+            placeholder="e.g., NRT"
+            required
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="field-departure">Departure date/time *</label>
+          <input
+            type="datetime-local"
+            id="field-departure"
+            class="input"
+            required
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="field-arrival">Arrival date/time *</label>
+          <input
+            type="datetime-local"
+            id="field-arrival"
+            class="input"
+            required
+          />
+        </div>
+
+        <div class="form-row">
+          <div class="form-group" style="flex: 2">
+            <label for="field-price">Total price *</label>
+            <input
+              type="number"
+              id="field-price"
+              class="input"
+              placeholder="8200"
+              step="0.01"
+              required
+            />
+          </div>
+          <div class="form-group" style="flex: 1">
+            <label for="field-currency">Currency</label>
+            <input
+              type="text"
+              id="field-currency"
+              class="input"
+              placeholder="TWD"
+              value="TWD"
+              maxlength="3"
+            />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="field-reference">Booking reference / PNR</label>
+          <input
+            type="text"
+            id="field-reference"
+            class="input"
+            placeholder="e.g., ABC123"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="field-notes">Notes</label>
+          <textarea
+            id="field-notes"
+            class="input textarea"
+            rows="3"
+            placeholder="Optional notes..."
+          ></textarea>
+        </div>
+
+        <div class="form-actions">
+          <button type="button" id="btn-save-booking" class="btn btn-primary">
+            Save booking
+          </button>
+          <button
+            type="button"
+            id="btn-cancel-booking"
+            class="btn btn-secondary"
+          >
+            Cancel
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>
