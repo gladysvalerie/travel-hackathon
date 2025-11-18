@@ -38,7 +38,21 @@
             required
           />
         </div>
-        <button id="login-btn" class="btn btn-primary">Log in</button>
+        <button id="login-btn" class="btn btn-primary">
+          <span class="btn-icon">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <line x1="5" y1="12" x2="19" y2="12" />
+              <polyline points="12 5 19 12 12 19" />
+            </svg>
+          </span>
+          Log in
+        </button>
         <button id="show-signup-btn" class="btn-link">Sign up instead</button>
       </div>
 
@@ -75,44 +89,139 @@
             required
           />
         </div>
-        <button id="signup-btn" class="btn btn-primary">Sign up</button>
+        <button id="signup-btn" class="btn btn-primary">
+          <span class="btn-icon">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+          </span>
+          Sign up
+        </button>
         <button id="show-login-btn" class="btn-link">Back to login</button>
       </div>
     </section>
 
     <!-- Dashboard View (visible when logged in) -->
-    <section id="dashboard-view" class="main-section hidden">
+    <section id="dashboard-view" class="dashboard-section hidden">
+      <!-- Profile Section -->
+      <div class="profile-section" id="profile-section">
+        <div class="profile-picture" id="profile-picture">MT</div>
+        <div class="profile-info">
+          <div class="profile-name" id="profile-name">Melvin Tang</div>
+          <div class="profile-email" id="profile-email-display">
+            test@example.com
+          </div>
+        </div>
+        <div class="profile-arrow">›</div>
+      </div>
+
       <div class="greeting">Hi, <span id="user-email"></span> 👋</div>
 
       <div class="actions">
         <button type="button" id="btn-screenshot" class="btn btn-action">
+          <span class="btn-icon">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path
+                d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"
+              />
+              <circle cx="12" cy="13" r="4" />
+            </svg>
+          </span>
           Screenshot booking
         </button>
 
         <!-- Screenshot options dialog -->
-        <div id="screenshot-options" class="screenshot-options hidden">
+        <div id="screenshot-options" class="hidden">
           <p>Select screenshot mode:</p>
-          <button
-            type="button"
-            id="btn-screenshot-full"
-            class="btn btn-secondary"
-          >
-            Full page
-          </button>
-          <button
-            type="button"
-            id="btn-screenshot-region"
-            class="btn btn-secondary"
-          >
-            Select area
-          </button>
-          <button type="button" id="btn-screenshot-cancel" class="btn btn-link">
-            Cancel
-          </button>
+          <div class="screenshot-options-buttons">
+            <button
+              type="button"
+              id="btn-screenshot-full"
+              class="btn btn-secondary"
+            >
+              <span class="btn-icon">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <rect x="2" y="6" width="20" height="12" rx="2" />
+                  <path d="M12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" />
+                </svg>
+              </span>
+              Full page
+            </button>
+            <button
+              type="button"
+              id="btn-screenshot-region"
+              class="btn btn-secondary"
+            >
+              <span class="btn-icon">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <path d="M9 9h6v6H9z" />
+                </svg>
+              </span>
+              Select area
+            </button>
+            <button
+              type="button"
+              id="btn-screenshot-cancel"
+              class="btn btn-secondary"
+            >
+              <span class="btn-icon">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </span>
+              Cancel
+            </button>
+          </div>
         </div>
 
         <button type="button" id="btn-upload" class="btn btn-action">
-          Upload file (PDF / image)
+          <span class="btn-icon">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+          </span>
+          Upload file
         </button>
         <input
           type="file"
@@ -121,6 +230,22 @@
           class="hidden"
         />
         <button type="button" id="btn-manual" class="btn btn-action">
+          <span class="btn-icon">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path
+                d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
+              />
+              <path
+                d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
+              />
+            </svg>
+          </span>
           Enter manually
         </button>
       </div>
@@ -157,6 +282,17 @@
       </div>
       <div class="preview-actions">
         <button type="button" id="btn-use-screenshot" class="btn btn-primary">
+          <span class="btn-icon">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          </span>
           Use this screenshot
         </button>
         <button
@@ -164,6 +300,21 @@
           id="btn-retake-screenshot"
           class="btn btn-secondary"
         >
+          <span class="btn-icon">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <polyline points="23 4 23 10 17 10" />
+              <polyline points="1 20 1 14 7 14" />
+              <path
+                d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"
+              />
+            </svg>
+          </span>
           Retake
         </button>
       </div>
@@ -175,6 +326,28 @@
       <p id="screenshot-status" class="screenshot-status"></p>
 
       <div id="manual-form-error" class="form-error hidden"></div>
+
+      <!-- AI Extraction Actions -->
+      <div class="ai-actions">
+        <button type="button" id="btn-ai-fill" class="btn btn-secondary">
+          <span class="btn-icon">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+              <circle cx="9" cy="9" r="1" />
+              <circle cx="15" cy="9" r="1" />
+              <path d="M9 15h6" />
+            </svg>
+          </span>
+          Extract from screenshot
+        </button>
+        <span id="ai-status" class="ai-status"></span>
+      </div>
 
       <form id="manual-booking-form" class="booking-form">
         <div class="form-group">
@@ -199,26 +372,37 @@
           />
         </div>
 
-        <div class="form-group">
-          <label for="field-origin">Origin (city or IATA) *</label>
-          <input
-            type="text"
-            id="field-origin"
-            class="input"
-            placeholder="e.g., TPE"
-            required
-          />
-        </div>
-
-        <div class="form-group">
-          <label for="field-destination">Destination (city or IATA) *</label>
-          <input
-            type="text"
-            id="field-destination"
-            class="input"
-            placeholder="e.g., NRT"
-            required
-          />
+        <!-- Origin/Destination Row with Arrow -->
+        <div class="origin-destination-row">
+          <div class="form-group">
+            <label for="field-origin">Origin *</label>
+            <input
+              type="text"
+              id="field-origin"
+              class="input"
+              placeholder="TPE"
+              required
+            />
+          </div>
+          <div class="origin-destination-arrow">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+            >
+              <path d="M5 12h14M12 5l7 7-7 7" />
+            </svg>
+          </div>
+          <div class="form-group">
+            <label for="field-destination">Destination *</label>
+            <input
+              type="text"
+              id="field-destination"
+              class="input"
+              placeholder="NRT"
+              required
+            />
+          </div>
         </div>
 
         <div class="form-group">
@@ -242,7 +426,7 @@
         </div>
 
         <div class="form-row">
-          <div class="form-group" style="flex: 2">
+          <div class="form-group" style="flex: 1">
             <label for="field-price">Total price *</label>
             <input
               type="number"
@@ -253,16 +437,21 @@
               required
             />
           </div>
-          <div class="form-group" style="flex: 1">
+          <div class="form-group" style="flex: 0 0 auto">
             <label for="field-currency">Currency</label>
-            <input
-              type="text"
-              id="field-currency"
-              class="input"
-              placeholder="TWD"
-              value="TWD"
-              maxlength="3"
-            />
+            <select id="field-currency" class="input">
+              <option value="TWD">TWD</option>
+              <option value="USD">USD</option>
+              <option value="EUR">EUR</option>
+              <option value="GBP">GBP</option>
+              <option value="JPY">JPY</option>
+              <option value="CNY">CNY</option>
+              <option value="AUD">AUD</option>
+              <option value="CAD">CAD</option>
+              <option value="CHF">CHF</option>
+              <option value="SGD">SGD</option>
+              <option value="HKD">HKD</option>
+            </select>
           </div>
         </div>
 
@@ -285,21 +474,93 @@
             placeholder="Optional notes..."
           ></textarea>
         </div>
+      </form>
 
-        <div class="form-actions">
-          <button type="button" id="btn-save-booking" class="btn btn-primary">
-            Save booking
-          </button>
-          <button
-            type="button"
-            id="btn-cancel-booking"
-            class="btn btn-secondary"
-          >
-            Cancel
+      <!-- Fixed Form Actions at Bottom -->
+      <div class="form-actions-fixed">
+        <button type="button" id="btn-save-booking" class="btn btn-primary">
+          <span class="btn-icon">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          </span>
+          Save booking
+        </button>
+        <button type="button" id="btn-cancel-booking" class="btn btn-secondary">
+          <span class="btn-icon">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </span>
+          Cancel
+        </button>
+      </div>
+    </section>
+
+    <!-- Profile Modal -->
+    <div id="profile-modal" class="profile-modal">
+      <div class="profile-modal-content">
+        <div class="profile-modal-header">
+          <h2>Profile</h2>
+          <button class="profile-modal-close" id="profile-modal-close">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              width="20"
+              height="20"
+            >
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
           </button>
         </div>
-      </form>
-    </section>
+        <div class="profile-modal-body">
+          <div class="profile-modal-picture" id="profile-modal-picture">MT</div>
+          <div class="profile-modal-name" id="profile-modal-name">
+            Melvin Tang
+          </div>
+          <div class="profile-modal-email" id="profile-modal-email">
+            test@example.com
+          </div>
+          <button
+            class="btn btn-primary"
+            id="profile-logout-btn"
+            style="margin-top: 20px; width: 100%"
+          >
+            <span class="btn-icon">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+            </span>
+            Log out
+          </button>
+        </div>
+      </div>
+    </div>
 
     <script type="module" src="popup.js"></script>
   </body>
