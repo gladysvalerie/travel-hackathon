@@ -210,5 +210,5 @@ Content-Type: application/json
 
 ###
 # GET SETTLEMENT RESULT
-GET {{baseUrl}}/trip/95761412-caa3-45aa-aa14-17c9d0fa20f7/settlement
+GET {{baseUrl}}/settlement/95761412-caa3-45aa-aa14-17c9d0fa20f7
 Authorization: Bearer {{token}}
