@@ -1,0 +1,83 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+    id              Int         @id @ default(autoincrement())
+    name            String?
+    email           String      @unique
+    passwordHash    String
+    createdAt       DateTime @default(now())
+
+    // Relations
+    tripsCreated    Trip[]      @relation("CreatedTrips")
+    tripMembers     TripMember[]
+    expensesPaid    Expense[]   @relation("PaidExpenses")
+    expenseSplits   ExpenseSplit[]
+}
+
+model Trip {
+    id              Int         @id @default(autoincrement())
+    name            String
+    createdAt       DateTime    @default(now())
+
+    // Relations
+    createdBy       Int
+    creator         User        @relation("CreatedTrips", fields: [createdBy], references: [id])
+    members         TripMember[]
+    expenses        Expense[]
+}
+
+model TripMember {
+    id              Int         @id @default(autoincrement())
+
+    tripId          Int
+    userId          Int
+    role            String @default("member")
+
+    // Relations
+    trip            Trip        @relation(fields: [tripId], references: [id])
+    user            User        @relation(fields: [userId], references: [id])
+
+    @@unique([tripId, userId])
+}   
+
+model Expense {
+    id              Int         @id @default(autoincrement())
+    description     String?
+    amount          Float
+    createdAt       DateTime    @default(now())
+
+    tripId          Int
+    paidBy          Int
+
+    // Relations
+    trip            Trip        @relation(fields: [tripId], references: [id])
+    payer           User        @relation("PaidExpenses", fields: [paidBy], references: [id])
+    splits          ExpenseSplit[]
+}
+
+
+model ExpenseSplit {
+    id          Int     @id @default(autoincrement())
+
+    expenseId   Int
+    userId      Int
+    shareAmount Float
+
+    // Relations
+    expense     Expense @relation(fields: [expenseId], references: [id])
+    user        User    @relation(fields: [userId], references: [id])
+}

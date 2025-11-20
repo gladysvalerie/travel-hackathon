@@ -1,0 +1,29 @@
+import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import authRoutes from './routes/auth.js'
+// import tripRoutes from './routes/trips.js'
+// import expenseRoutes from './routes/expenses.js'
+// import settlementRoutes from './routes/settlements.js'
+
+dotenv.config();
+
+const app = express();
+
+app.use(cors());
+app.use(express.json());
+
+const PORT = process.env.PORT || 5000;
+
+app.get('/', (req, res) => {
+    res.sendStatus(201)
+})
+
+app.use('/auth', authRoutes)
+// app.use('/trips', tripRoutes)
+// app.use('/expenses', expenseRoutes)
+// app.use('/settlements', settlementRoutes)
+
+app.listen(PORT, () => {
+    console.log(`Running server in port: ${PORT}`)
+})
