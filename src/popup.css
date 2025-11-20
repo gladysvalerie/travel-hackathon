@@ -1177,6 +1177,125 @@ select:focus-visible {
   margin-left: 8px;
 }
 
+/* File preview styles */
+.file-preview-container {
+  margin: 12px 0;
+  display: flex;
+  justify-content: center;
+}
+
+.file-preview {
+  position: relative;
+  display: inline-block;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px;
+  max-width: 200px;
+}
+
+.file-preview-image {
+  max-width: 180px;
+  max-height: 120px;
+  border-radius: 4px;
+  object-fit: contain;
+}
+
+.file-preview-pdf {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  color: #ef4444;
+}
+
+.file-preview-name {
+  font-size: 12px;
+  color: #64748b;
+  text-align: center;
+  word-break: break-word;
+  max-width: 160px;
+}
+
+.btn-remove-file {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+}
+
+.btn-remove-file:hover {
+  background: #dc2626;
+  transform: scale(1.1);
+}
+
+/* Input with icon (Google Maps) */
+.input-with-icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-with-icon .input {
+  padding-right: 40px;
+}
+
+.btn-open-gmaps {
+  position: absolute;
+  right: 8px;
+  background: transparent;
+  border: none;
+  color: #3b82f6;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.btn-open-gmaps:hover {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+/* Edit button in history */
+.btn-edit-booking {
+  margin-top: 8px;
+  padding: 6px 12px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.btn-edit-booking:hover {
+  background: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+}
+
 .empty-state {
   text-align: center;
   padding: 40px 20px;

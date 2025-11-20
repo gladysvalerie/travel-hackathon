@@ -159,6 +159,53 @@ CRITICAL RULES:
 - For Google Maps URL: If restaurant_name and location_text are available, construct a search URL like: https://www.google.com/maps/search/?api=1&query=Restaurant+Name+Location (URL-encode the query parameters)
 - Support Chinese (Traditional Mandarin / 繁體中文) - extract restaurant names, dish names, and locations in Chinese if present`,
     };
+  } else if (type === "attraction") {
+    return {
+      system: `You are an expert assistant specialized in extracting structured data from attraction tickets, booking confirmations, and attraction booking documents. 
+You are given an image or PDF of an attraction ticket, booking confirmation, or attraction booking. 
+The document may be in English, Chinese (Traditional Mandarin), or other languages. You must be able to read and extract information from Chinese characters (繁體中文) as well.
+Your job is to carefully extract ALL available information into a JSON object with specific fields. 
+Be thorough and extract as much detail as possible. If a field is missing or unclear, use null rather than guessing. 
+Do not invent attraction bookings that do not exist in the document.
+
+Look for:
+- Attraction name (may be in English, Chinese, or other languages)
+- Location/address (may be in English, Chinese, or other languages)
+- Visit date and time
+- Number of tickets
+- Ticket price per person
+- Total price and currency
+- Booking platform (Klook, KKday, official website, etc.)
+- Any additional notes
+
+IMPORTANT: If you can identify the attraction name, you should search for its Google Maps URL. Construct a Google Maps search URL in the format: https://www.google.com/maps/search/?api=1&query=[ATTRACTION_NAME]+[LOCATION_TEXT] (URL-encoded). If the attraction name and location are available, provide this URL even if it's not visible in the document.
+
+Return ONLY valid JSON with no additional text, markdown, or formatting.`,
+      user: `Extract attraction booking/ticket information from this document and return it as a JSON object with the following EXACT structure:
+{
+  "attraction_name": "string or null (attraction name, may be in English, Chinese, or other languages)",
+  "location_text": "string or null (address or location description, may be in English, Chinese, or other languages)",
+  "google_maps_url": "string or null (Google Maps search URL constructed as: https://www.google.com/maps/search/?api=1&query=[ATTRACTION_NAME]+[LOCATION_TEXT] with URL encoding, or the actual Google Maps URL if visible in the document)",
+  "visit_datetime": "ISO 8601 datetime string or null (e.g., '2025-12-24T10:00:00', format: YYYY-MM-DDTHH:MM:SS)",
+  "ticket_count": "number or null (number of tickets)",
+  "ticket_price_per_person": "number or null (price per ticket as number only, no currency symbols or commas)",
+  "price": "number or null (total price as number only, no currency symbols or commas)",
+  "currency": "string or null (3-letter currency code like USD, TWD, EUR, JPY)",
+  "platform": "string or null (booking platform like 'Klook', 'KKday', 'Official Website', etc.)",
+  "notes": "string or null (any additional relevant information)"
+}
+
+CRITICAL RULES:
+- Visit datetime MUST be in ISO 8601 format: YYYY-MM-DDTHH:MM:SS (e.g., '2025-12-24T10:00:00')
+- Price must be a number only (remove all commas, currency symbols, spaces)
+- Extract the TOTAL price for all tickets
+- Ticket count is the number of tickets purchased
+- Ticket price per person is the price for a single ticket
+- Location text can be address, area name, or location description
+- Platform is the booking website/service (Klook, KKday, official website, etc.)
+- For Google Maps URL: If attraction_name and location_text are available, construct a search URL like: https://www.google.com/maps/search/?api=1&query=Attraction+Name+Location (URL-encode the query parameters)
+- Support Chinese (Traditional Mandarin / 繁體中文) - extract attraction names and locations in Chinese if present`,
+    };
   } else {
     // Default to flight
     return {
@@ -453,6 +500,36 @@ app.post("/api/parse-booking", async (req, res) => {
               : null,
         currency: extractedData.currency || null,
         dishes: dishes, // Array of {name, price} objects
+        notes: extractedData.notes || null,
+      };
+    } else if (bookingType === "attraction") {
+      normalized = {
+        attraction_name: extractedData.attraction_name || null,
+        location_text: extractedData.location_text || null,
+        google_maps_url: extractedData.google_maps_url || null,
+        visit_datetime: extractedData.visit_datetime || null,
+        ticket_count:
+          typeof extractedData.ticket_count === "number"
+            ? extractedData.ticket_count
+            : typeof extractedData.ticket_count === "string"
+              ? parseInt(extractedData.ticket_count, 10)
+              : null,
+        ticket_price_per_person:
+          typeof extractedData.ticket_price_per_person === "number"
+            ? extractedData.ticket_price_per_person
+            : typeof extractedData.ticket_price_per_person === "string"
+              ? parseFloat(
+                  extractedData.ticket_price_per_person.replace(/[^0-9.-]/g, "")
+                )
+              : null,
+        price:
+          typeof extractedData.price === "number"
+            ? extractedData.price
+            : typeof extractedData.price === "string"
+              ? parseFloat(extractedData.price.replace(/[^0-9.-]/g, ""))
+              : null,
+        currency: extractedData.currency || null,
+        platform: extractedData.platform || null,
         notes: extractedData.notes || null,
       };
     } else {

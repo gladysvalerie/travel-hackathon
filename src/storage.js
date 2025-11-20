@@ -83,3 +83,51 @@ export async function addBooking(booking) {
   });
 }
 
+/**
+ * Update an existing booking
+ * @param {Object} booking - Booking object with id
+ * @returns {Promise<Object>} - Updated booking
+ */
+export async function updateBooking(booking) {
+  if (!booking.id) {
+    throw new Error("Booking ID is required for update");
+  }
+  
+  const bookings = await getBookings();
+  const index = bookings.findIndex(b => b.id === booking.id);
+  
+  if (index === -1) {
+    throw new Error("Booking not found");
+  }
+  
+  // Preserve original createdAt if not provided
+  const updatedBooking = {
+    ...bookings[index],
+    ...booking,
+    createdAt: booking.createdAt || bookings[index].createdAt,
+    id: booking.id
+  };
+  
+  bookings[index] = updatedBooking;
+  
+  return new Promise((resolve, reject) => {
+    chrome.storage.sync.set({ [BOOKINGS_KEY]: bookings }, () => {
+      if (chrome.runtime.lastError) {
+        reject(chrome.runtime.lastError);
+      } else {
+        resolve(updatedBooking);
+      }
+    });
+  });
+}
+
+/**
+ * Get a booking by ID
+ * @param {string} id - Booking ID
+ * @returns {Promise<Object|null>} - Booking or null if not found
+ */
+export async function getBookingById(id) {
+  const bookings = await getBookings();
+  return bookings.find(b => b.id === id) || null;
+}
+

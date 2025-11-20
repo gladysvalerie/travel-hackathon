@@ -9,6 +9,8 @@ import {
   clearAuth,
   getBookings,
   addBooking,
+  updateBooking,
+  getBookingById,
 } from "./storage.js";
 import { apiLogin, apiSignup, saveBookingToServer } from "./api.js";
 import { analyzeBookingScreenshot } from "./aiClient.js";
@@ -114,6 +116,89 @@ let currentCategoryType = null;
 
 // Extracted dishes for restaurant bookings
 let extractedDishes = [];
+
+// Current file name for PDFs
+let currentFileName = null;
+
+// Editing booking ID (null if creating new, ID if editing)
+let editingBookingId = null;
+
+/**
+ * Update file preview display
+ */
+function updateFilePreview() {
+  const previewContainer = document.getElementById("file-preview-container");
+  const previewImage = document.getElementById("file-preview-image");
+  const previewPdf = document.getElementById("file-preview-pdf");
+  const previewName = document.getElementById("file-preview-name");
+
+  if (!previewContainer) return;
+
+  if (lastScreenshotDataUrl) {
+    const isPdf = lastScreenshotDataUrl.startsWith("data:application/pdf");
+    previewContainer.classList.remove("hidden");
+
+    if (isPdf) {
+      // Show PDF preview
+      if (previewImage) previewImage.classList.add("hidden");
+      if (previewPdf) {
+        previewPdf.classList.remove("hidden");
+        if (previewName) {
+          previewName.textContent = currentFileName || "booking.pdf";
+        }
+      }
+    } else {
+      // Show image preview
+      if (previewPdf) previewPdf.classList.add("hidden");
+      if (previewImage) {
+        previewImage.classList.remove("hidden");
+        previewImage.src = lastScreenshotDataUrl;
+      }
+    }
+  } else {
+    previewContainer.classList.add("hidden");
+  }
+}
+
+/**
+ * Remove file (screenshot/PDF)
+ */
+function removeFile() {
+  lastScreenshotDataUrl = null;
+  currentFileName = null;
+  updateFilePreview();
+  chrome.storage.local.remove(["lastScreenshot", "lastScreenshotRegion"]);
+  
+  // Update status
+  if (screenshotStatus) {
+    screenshotStatus.textContent = "No screenshot; please fill the fields manually.";
+  }
+  
+  // Update button text
+  if (aiFillBtn) {
+    const buttonTextElement = aiFillBtn.querySelector('.btn-text');
+    if (buttonTextElement) {
+      buttonTextElement.textContent = "Extract from screenshot";
+    }
+  }
+}
+
+/**
+ * Update Google Maps button visibility based on URL field values
+ */
+function updateGoogleMapsButtons() {
+  const restaurantUrl = document.getElementById("field-google-maps-url")?.value;
+  const restaurantBtn = document.getElementById("btn-open-gmaps-restaurant");
+  if (restaurantBtn) {
+    restaurantBtn.style.display = restaurantUrl ? "flex" : "none";
+  }
+
+  const attractionUrl = document.getElementById("field-google-maps-url-attraction")?.value;
+  const attractionBtn = document.getElementById("btn-open-gmaps-attraction");
+  if (attractionBtn) {
+    attractionBtn.style.display = attractionUrl ? "flex" : "none";
+  }
+}
 
 /**
  * Save all form data for the current category
@@ -741,7 +826,11 @@ function showManualFormView(categoryType, { fromScreenshot = false }) {
   
   const titleElement = document.getElementById("manual-form-title");
   if (titleElement) {
-    titleElement.textContent = `Add ${categoryNames[categoryType]} booking`;
+    if (editingBookingId) {
+      titleElement.textContent = `Edit ${categoryNames[categoryType]} booking`;
+    } else {
+      titleElement.textContent = `Add ${categoryNames[categoryType]} booking`;
+    }
   }
   
   // Hide all forms
@@ -756,10 +845,10 @@ function showManualFormView(categoryType, { fromScreenshot = false }) {
     formElement.classList.remove("hidden");
   }
   
-  // Show/hide AI actions (for flight, hotel, and restaurant)
+  // Show/hide AI actions (for flight, hotel, restaurant, and attraction)
   const aiActionsContainer = document.getElementById("ai-actions-container");
   if (aiActionsContainer) {
-    if (categoryType === "flight" || categoryType === "hotel" || categoryType === "restaurant") {
+    if (categoryType === "flight" || categoryType === "hotel" || categoryType === "restaurant" || categoryType === "attraction") {
       aiActionsContainer.classList.remove("hidden");
     } else {
       aiActionsContainer.classList.add("hidden");
@@ -770,6 +859,9 @@ function showManualFormView(categoryType, { fromScreenshot = false }) {
   if (regionSelectionView) regionSelectionView.classList.add("hidden");
   if (screenshotPreviewView) screenshotPreviewView.classList.add("hidden");
   if (manualFormView) manualFormView.classList.remove("hidden");
+
+  // Show file preview if available
+  updateFilePreview();
 
   // Update screenshot status and AI button text based on file type
   if (screenshotStatus) {
@@ -1403,6 +1495,7 @@ async function handleFileChange(event) {
 
     // Store the file data
     lastScreenshotDataUrl = dataUrl;
+    currentFileName = file.name;
     chrome.storage.local.set({
       lastScreenshot: dataUrl,
       pendingScreenshot: false, // Clear pending since we're going directly to manual form
@@ -1526,9 +1619,14 @@ async function saveBookingFromForm(categoryType) {
 
   let booking = {
     type: categoryType,
-    createdAt: new Date().toISOString(),
+    createdAt: editingBookingId ? undefined : new Date().toISOString(), // Keep original createdAt when editing
     screenshotAttached: !!lastScreenshotDataUrl,
   };
+
+  // If editing, preserve the ID
+  if (editingBookingId) {
+    booking.id = editingBookingId;
+  }
 
   // Common fields
   const getFieldValue = (id) => {
@@ -1630,7 +1728,7 @@ async function saveBookingFromForm(categoryType) {
     const receiptFile = document.getElementById("field-restaurant-receipt")?.files[0];
     const notes = getFieldValue("field-notes-restaurant");
 
-    if (!restaurantName || !locationText || !visitDateTime || !partySize || !price || price <= 0) {
+    if (!restaurantName || !visitDateTime || !partySize || !price || price <= 0) {
       formError.textContent = "Please fill in all required fields (*)";
       formError.classList.remove("hidden");
       return null;
@@ -1709,8 +1807,22 @@ async function handleSaveBooking() {
     // Save to server (placeholder for now)
     await saveBookingToServer(booking);
     
-    // Save to local storage
-    await addBooking(booking);
+    // Save to local storage (update if editing, add if new)
+    if (editingBookingId) {
+      await updateBooking(booking);
+      alert("Booking updated!");
+    } else {
+      await addBooking(booking);
+      alert("Booking saved!");
+    }
+
+    // Clear editing mode
+    editingBookingId = null;
+
+    // Reload history if on history tab
+    if (tabHistory && tabHistory.classList.contains("active")) {
+      await loadHistoryBookings();
+    }
 
     // Clear form and screenshot
     clearManualForm();
@@ -1721,8 +1833,6 @@ async function handleSaveBooking() {
       "lastScreenshot",
       "lastScreenshotRegion",
     ]);
-
-    alert("Booking saved!");
 
     // Clear form data
     if (currentCategoryType) {
@@ -2027,6 +2137,93 @@ async function handleAiFillFromScreenshot() {
       }
       
       console.log("Restaurant extraction complete. Total fields filled:", fieldsFilled);
+    } else if (currentCategoryType === 'attraction') {
+      // Attraction-specific fields
+      const attractionNameInput = document.getElementById("field-attraction-name");
+      const locationTextInput = document.getElementById("field-location-text-attraction");
+      const googleMapsUrlInput = document.getElementById("field-google-maps-url-attraction");
+      const visitDateTimeInput = document.getElementById("field-visit-datetime-attraction");
+      const ticketCountInput = document.getElementById("field-ticket-count");
+      const ticketPricePerPersonInput = document.getElementById("field-ticket-price-per-person");
+      const priceAttractionInput = document.getElementById("field-price-attraction");
+      const currencyAttractionInput = document.getElementById("field-currency-attraction");
+      const platformAttractionInput = document.getElementById("field-platform-attraction");
+      const notesAttractionInput = document.getElementById("field-notes-attraction");
+
+      if (data.attraction_name && attractionNameInput) {
+        attractionNameInput.value = data.attraction_name;
+        fieldsFilled++;
+        console.log("Filled attraction name:", data.attraction_name);
+      }
+      if (data.location_text && locationTextInput) {
+        locationTextInput.value = data.location_text;
+        fieldsFilled++;
+        console.log("Filled location text:", data.location_text);
+      }
+      if (data.google_maps_url && googleMapsUrlInput) {
+        googleMapsUrlInput.value = data.google_maps_url;
+        fieldsFilled++;
+        console.log("Filled Google Maps URL:", data.google_maps_url);
+        updateGoogleMapsButtons();
+      }
+      if (data.visit_datetime && visitDateTimeInput) {
+        try {
+          const visitDate = new Date(data.visit_datetime);
+          if (!isNaN(visitDate.getTime())) {
+            const year = visitDate.getFullYear();
+            const month = String(visitDate.getMonth() + 1).padStart(2, "0");
+            const day = String(visitDate.getDate()).padStart(2, "0");
+            const hours = String(visitDate.getHours()).padStart(2, "0");
+            const minutes = String(visitDate.getMinutes()).padStart(2, "0");
+            visitDateTimeInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
+            fieldsFilled++;
+            console.log("Filled visit datetime:", visitDateTimeInput.value);
+          }
+        } catch (dateError) {
+          console.error("Error parsing visit datetime:", dateError);
+        }
+      }
+      if (data.ticket_count !== null && data.ticket_count !== undefined && ticketCountInput) {
+        ticketCountInput.value = data.ticket_count;
+        fieldsFilled++;
+        console.log("Filled ticket count:", data.ticket_count);
+      }
+      if (data.ticket_price_per_person !== null && data.ticket_price_per_person !== undefined && ticketPricePerPersonInput) {
+        ticketPricePerPersonInput.value = data.ticket_price_per_person;
+        fieldsFilled++;
+        console.log("Filled ticket price per person:", data.ticket_price_per_person);
+      }
+      if (data.price !== null && data.price !== undefined && priceAttractionInput) {
+        priceAttractionInput.value = data.price;
+        fieldsFilled++;
+        console.log("Filled price:", data.price);
+      }
+      if (data.currency && currencyAttractionInput) {
+        if (currencyAttractionInput.tagName === "SELECT") {
+          currencyAttractionInput.value = data.currency.toUpperCase();
+        } else {
+          currencyAttractionInput.value = data.currency.toUpperCase();
+        }
+        fieldsFilled++;
+        console.log("Filled currency:", data.currency);
+      }
+      if (data.platform && platformAttractionInput) {
+        platformAttractionInput.value = data.platform;
+        fieldsFilled++;
+        console.log("Filled platform:", data.platform);
+      }
+      if (data.notes && notesAttractionInput) {
+        const existingNotes = notesAttractionInput.value.trim();
+        if (existingNotes) {
+          notesAttractionInput.value = existingNotes + "\n\n[AI Extracted]: " + data.notes;
+        } else {
+          notesAttractionInput.value = "[AI Extracted]: " + data.notes;
+        }
+        fieldsFilled++;
+        console.log("Filled notes");
+      }
+      
+      console.log("Attraction extraction complete. Total fields filled:", fieldsFilled);
     } else {
       // Flight-specific fields (default)
       if (data.airline && airlineInput) {
@@ -2268,7 +2465,9 @@ function clearManualForm() {
   }
 
   lastScreenshotDataUrl = null;
+  currentFileName = null;
   extractedDishes = [];
+  editingBookingId = null;
   
   // Clear dishes display
   const dishesList = document.getElementById("restaurant-dishes-list");
@@ -2276,12 +2475,123 @@ function clearManualForm() {
     dishesList.innerHTML = "";
   }
   
+  // Clear file preview
+  updateFilePreview();
+  
   // Clear saved form data
   if (currentCategoryType) {
     chrome.storage.local.remove([`formData_${currentCategoryType}`]);
   }
   
   chrome.storage.local.remove(["lastScreenshot", "lastScreenshotRegion"]);
+}
+
+/**
+ * Edit a booking - load it into the form
+ * @param {string} bookingId - Booking ID to edit
+ */
+async function editBooking(bookingId) {
+  try {
+    const booking = await getBookingById(bookingId);
+    if (!booking) {
+      alert("Booking not found");
+      return;
+    }
+
+    // Set editing mode
+    editingBookingId = bookingId;
+    currentCategoryType = booking.type;
+
+    // Update title
+    const titleElement = document.getElementById("manual-form-title");
+    if (titleElement) {
+      const categoryNames = {
+        flight: "Flight",
+        hotel: "Hotel",
+        restaurant: "Restaurant",
+        attraction: "Attraction"
+      };
+      titleElement.textContent = `Edit ${categoryNames[booking.type]} booking`;
+    }
+
+    // Show manual form view
+    showManualFormView(booking.type, { fromScreenshot: false });
+
+    // Load booking data into form
+    const formElement = document.getElementById(`manual-form-${booking.type}`);
+    if (!formElement) {
+      console.error("Form element not found for type:", booking.type);
+      return;
+    }
+
+    // Load data based on type
+    if (booking.type === "flight") {
+      if (booking.airline) document.getElementById("field-airline").value = booking.airline;
+      if (booking.flightNumber) document.getElementById("field-flight-number").value = booking.flightNumber;
+      if (booking.origin) document.getElementById("field-origin").value = booking.origin;
+      if (booking.destination) document.getElementById("field-destination").value = booking.destination;
+      if (booking.departureDateTime) document.getElementById("field-departure").value = booking.departureDateTime;
+      if (booking.arrivalDateTime) document.getElementById("field-arrival").value = booking.arrivalDateTime;
+      if (booking.totalPrice) document.getElementById("field-price").value = booking.totalPrice;
+      if (booking.currency) document.getElementById("field-currency").value = booking.currency;
+      if (booking.reference) document.getElementById("field-reference").value = booking.reference;
+      if (booking.notes) document.getElementById("field-notes").value = booking.notes;
+    } else if (booking.type === "hotel") {
+      if (booking.hotelName) document.getElementById("field-hotel-name").value = booking.hotelName;
+      if (booking.hotelAddress) document.getElementById("field-hotel-address").value = booking.hotelAddress;
+      if (booking.city) document.getElementById("field-city").value = booking.city;
+      if (booking.country) document.getElementById("field-country").value = booking.country;
+      if (booking.checkInDate) document.getElementById("field-check-in").value = booking.checkInDate;
+      if (booking.checkOutDate) document.getElementById("field-check-out").value = booking.checkOutDate;
+      if (booking.nights) document.getElementById("field-nights").value = booking.nights;
+      if (booking.roomType) document.getElementById("field-room-type").value = booking.roomType;
+      if (booking.guests) document.getElementById("field-guests").value = booking.guests;
+      if (booking.totalPrice) document.getElementById("field-price-hotel").value = booking.totalPrice;
+      if (booking.currency) document.getElementById("field-currency-hotel").value = booking.currency;
+      if (booking.platform) document.getElementById("field-platform-hotel").value = booking.platform;
+      if (booking.reservationId) document.getElementById("field-reservation-id").value = booking.reservationId;
+      if (booking.notes) document.getElementById("field-notes-hotel").value = booking.notes;
+    } else if (booking.type === "restaurant") {
+      if (booking.restaurantName) document.getElementById("field-restaurant-name").value = booking.restaurantName;
+      if (booking.locationText) document.getElementById("field-location-text").value = booking.locationText;
+      if (booking.googleMapsUrl) document.getElementById("field-google-maps-url").value = booking.googleMapsUrl;
+      if (booking.visitDateTime) document.getElementById("field-visit-datetime").value = booking.visitDateTime;
+      if (booking.partySize) document.getElementById("field-party-size").value = booking.partySize;
+      if (booking.totalPrice) document.getElementById("field-price-restaurant").value = booking.totalPrice;
+      if (booking.currency) document.getElementById("field-currency-restaurant").value = booking.currency;
+      if (booking.notes) document.getElementById("field-notes-restaurant").value = booking.notes;
+      if (booking.dishes && Array.isArray(booking.dishes)) {
+        extractedDishes = booking.dishes;
+        renderDishesList();
+      }
+    } else if (booking.type === "attraction") {
+      if (booking.attractionName) document.getElementById("field-attraction-name").value = booking.attractionName;
+      if (booking.locationText) document.getElementById("field-location-text-attraction").value = booking.locationText;
+      if (booking.googleMapsUrl) document.getElementById("field-google-maps-url-attraction").value = booking.googleMapsUrl;
+      if (booking.visitDateTime) document.getElementById("field-visit-datetime-attraction").value = booking.visitDateTime;
+      if (booking.ticketCount) document.getElementById("field-ticket-count").value = booking.ticketCount;
+      if (booking.ticketPricePerPerson) document.getElementById("field-ticket-price-per-person").value = booking.ticketPricePerPerson;
+      if (booking.totalPrice) document.getElementById("field-price-attraction").value = booking.totalPrice;
+      if (booking.currency) document.getElementById("field-currency-attraction").value = booking.currency;
+      if (booking.platform) document.getElementById("field-platform-attraction").value = booking.platform;
+      if (booking.notes) document.getElementById("field-notes-attraction").value = booking.notes;
+    }
+
+    // Update Google Maps buttons visibility
+    updateGoogleMapsButtons();
+
+    // Navigate to Add tab
+    if (tabAdd) tabAdd.classList.add("active");
+    if (tabHistory) tabHistory.classList.remove("active");
+    if (tabAddContent) tabAddContent.classList.remove("hidden");
+    if (tabHistoryContent) tabHistoryContent.classList.add("hidden");
+
+    // Save view state
+    saveViewState();
+  } catch (error) {
+    console.error("Error editing booking:", error);
+    alert("Failed to load booking for editing: " + error.message);
+  }
 }
 
 /**
@@ -2381,10 +2691,26 @@ async function loadHistoryBookings(filterType = "all") {
         const priceFormatted = new Intl.NumberFormat().format(booking.totalPrice || booking.price || 0);
         price.textContent = `${priceFormatted} ${booking.currency || "TWD"}`;
 
+        // Edit button
+        const editBtn = document.createElement("button");
+        editBtn.className = "btn-edit-booking";
+        editBtn.innerHTML = `
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+          </svg>
+          Edit
+        `;
+        editBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          editBooking(booking.id);
+        });
+
         card.appendChild(badge);
         card.appendChild(title);
         card.appendChild(date);
         card.appendChild(price);
+        card.appendChild(editBtn);
         if (dishesSection) {
           card.appendChild(dishesSection);
         }
@@ -2506,6 +2832,51 @@ function attachEventListeners() {
     handleScreenshotCancel(e);
   });
   fileInput.addEventListener("change", handleFileChange);
+
+  // File preview remove button
+  const btnRemoveFile = document.getElementById("btn-remove-file");
+  if (btnRemoveFile) {
+    btnRemoveFile.addEventListener("click", (e) => {
+      e.preventDefault();
+      removeFile();
+    });
+  }
+
+  // Google Maps buttons
+  const btnOpenGmapsRestaurant = document.getElementById("btn-open-gmaps-restaurant");
+  if (btnOpenGmapsRestaurant) {
+    btnOpenGmapsRestaurant.addEventListener("click", (e) => {
+      e.preventDefault();
+      const url = document.getElementById("field-google-maps-url")?.value;
+      if (url) {
+        chrome.tabs.create({ url });
+      }
+    });
+  }
+
+  const btnOpenGmapsAttraction = document.getElementById("btn-open-gmaps-attraction");
+  if (btnOpenGmapsAttraction) {
+    btnOpenGmapsAttraction.addEventListener("click", (e) => {
+      e.preventDefault();
+      const url = document.getElementById("field-google-maps-url-attraction")?.value;
+      if (url) {
+        chrome.tabs.create({ url });
+      }
+    });
+  }
+
+  // Update Google Maps buttons on URL field changes
+  const googleMapsUrlRestaurant = document.getElementById("field-google-maps-url");
+  if (googleMapsUrlRestaurant) {
+    googleMapsUrlRestaurant.addEventListener("input", updateGoogleMapsButtons);
+    googleMapsUrlRestaurant.addEventListener("change", updateGoogleMapsButtons);
+  }
+
+  const googleMapsUrlAttraction = document.getElementById("field-google-maps-url-attraction");
+  if (googleMapsUrlAttraction) {
+    googleMapsUrlAttraction.addEventListener("input", updateGoogleMapsButtons);
+    googleMapsUrlAttraction.addEventListener("change", updateGoogleMapsButtons);
+  }
 
   // History filters
   historyFilterAll.addEventListener("click", () => {
