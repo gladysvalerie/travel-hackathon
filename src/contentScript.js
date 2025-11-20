@@ -87,6 +87,10 @@ function createRegionSelectionUI() {
       // Clean up overlay FIRST before sending message (so it's not in screenshot)
       cleanupRegionSelection();
 
+      // Store current scroll position to ensure we capture at the same position
+      const scrollX = window.scrollX || window.pageXOffset || 0;
+      const scrollY = window.scrollY || window.pageYOffset || 0;
+
       // Wait a brief moment to ensure overlay is fully removed from DOM
       setTimeout(() => {
         chrome.runtime.sendMessage({
@@ -97,6 +101,8 @@ function createRegionSelectionUI() {
             width,
             height,
             scale: window.devicePixelRatio || 1,
+            scrollX,
+            scrollY,
           },
         });
       }, 100);

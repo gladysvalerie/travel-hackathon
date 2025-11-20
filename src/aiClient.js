@@ -8,18 +8,19 @@ const AI_BACKEND_BASE_URL = "http://localhost:3001";
 
 /**
  * Analyze booking screenshot using OpenAI Vision API
- * @param {string} imageDataUrl - Base64 data URL of the screenshot (e.g., "data:image/png;base64,...")
+ * @param {string} imageDataUrl - Base64 data URL of the screenshot (e.g., "data:image/png;base64,..." or "data:application/pdf;base64,...")
+ * @param {string} bookingType - Booking type: "flight" | "hotel" | "restaurant" | "attraction" (optional, defaults to "flight")
  * @returns {Promise<Object>} - Parsed booking data
  * @throws {Error} - If API call fails or returns error
  */
-export async function analyzeBookingScreenshot(imageDataUrl) {
+export async function analyzeBookingScreenshot(imageDataUrl, bookingType = 'flight') {
   if (!imageDataUrl) {
     throw new Error("No screenshot data provided");
   }
 
-  // Validate data URL format
-  if (!imageDataUrl.startsWith('data:image/')) {
-    throw new Error("Invalid image data URL format");
+  // Validate data URL format (accept both images and PDFs)
+  if (!imageDataUrl.startsWith('data:image/') && !imageDataUrl.startsWith('data:application/pdf')) {
+    throw new Error("Invalid file format. Please upload an image (PNG, JPG, etc.) or PDF file.");
   }
 
   try {
@@ -32,6 +33,7 @@ export async function analyzeBookingScreenshot(imageDataUrl) {
       },
       body: JSON.stringify({
         imageDataUrl: imageDataUrl,
+        bookingType: bookingType,
       }),
     });
 

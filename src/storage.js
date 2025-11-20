@@ -59,13 +59,15 @@ export async function getBookings() {
 
 /**
  * Add a new booking
- * @param {Object} booking - Booking object
+ * @param {Object} booking - Booking object (must include type field)
  * @returns {Promise<Object>} - Booking with generated ID
  */
 export async function addBooking(booking) {
   const bookings = await getBookings();
   const withId = {
     id: booking.id || String(Date.now()) + "-" + Math.random().toString(16).slice(2),
+    type: booking.type || "flight", // Default to flight for backward compatibility
+    createdAt: booking.createdAt || new Date().toISOString(),
     ...booking
   };
   bookings.push(withId);

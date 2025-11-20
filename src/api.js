@@ -42,3 +42,34 @@ export async function apiSignup(email, password) {
   };
 }
 
+/**
+ * Save booking to server
+ * @param {Object} booking - Booking object
+ * @returns {Promise<Object>} - Saved booking from server
+ */
+export async function saveBookingToServer(booking) {
+  // TODO: POST /bookings
+  console.log("Mock saveBookingToServer", booking);
+  
+  // Simulate API delay
+  await new Promise(resolve => setTimeout(resolve, 300));
+  
+  // For now, just resolve immediately
+  return booking;
+}
+
+/**
+ * Fetch bookings from server
+ * @returns {Promise<Array>} - Array of bookings from server
+ */
+export async function fetchBookingsFromServer() {
+  // TODO: GET /bookings
+  console.log("Mock fetchBookingsFromServer");
+  
+  // Simulate API delay
+  await new Promise(resolve => setTimeout(resolve, 300));
+  
+  // For now, return empty array (will sync with local storage later)
+  return [];
+}
+
