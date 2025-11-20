@@ -1,3 +1,9 @@
 import express from 'express'
-import prisma from "../config/prismaClient"
+import { getUser } from "../controllers/userController.js"
+import { authMiddleware } from '../middleware/auth.js'
 
+const router = express.Router()
+
+router.get('/me', authMiddleware, getUser)
+
+export default router

@@ -15,7 +15,8 @@ datasource db {
 }
 
 model User {
-    id              Int         @id @ default(autoincrement())
+    id              String         @id @ default(uuid())
+    username        String      @unique
     name            String?
     email           String      @unique
     passwordHash    String
@@ -29,39 +30,39 @@ model User {
 }
 
 model Trip {
-    id              Int         @id @default(autoincrement())
+    id              String         @id @default(uuid())
     name            String
     createdAt       DateTime    @default(now())
 
     // Relations
-    createdBy       Int
+    createdBy       String
     creator         User        @relation("CreatedTrips", fields: [createdBy], references: [id])
     members         TripMember[]
     expenses        Expense[]
 }
 
 model TripMember {
-    id              Int         @id @default(autoincrement())
+    id              String         @id @default(uuid())
 
-    tripId          Int
-    userId          Int
+    tripId          String
+    userId          String
     role            String @default("member")
 
     // Relations
-    trip            Trip        @relation(fields: [tripId], references: [id])
+    trip            Trip        @relation(fields: [tripId], references: [id], onDelete: Cascade)
     user            User        @relation(fields: [userId], references: [id])
 
     @@unique([tripId, userId])
 }   
 
 model Expense {
-    id              Int         @id @default(autoincrement())
+    id              String         @id @default(uuid())
     description     String?
     amount          Float
     createdAt       DateTime    @default(now())
 
-    tripId          Int
-    paidBy          Int
+    tripId          String
+    paidBy          String
 
     // Relations
     trip            Trip        @relation(fields: [tripId], references: [id])
@@ -71,10 +72,10 @@ model Expense {
 
 
 model ExpenseSplit {
-    id          Int     @id @default(autoincrement())
+    id          String     @id @default(uuid())
 
-    expenseId   Int
-    userId      Int
+    expenseId   String
+    userId      String
     shareAmount Float
 
     // Relations

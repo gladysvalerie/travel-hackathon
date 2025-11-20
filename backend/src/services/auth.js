@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import prisma from '../config/prismaClient.js'
 
-export async function register(name, email, password) {
+export async function register(username, name, email, password) {
     const existing = await prisma.user.findUnique({ where: { email } })
     if (existing) throw new Error("Email already registered")
 
@@ -10,6 +10,7 @@ export async function register(name, email, password) {
 
     const user = await prisma.user.create({
         data: {
+            username,
             name,
             email,
             passwordHash: hash
@@ -25,8 +26,15 @@ export async function register(name, email, password) {
     return { user, token }
 }
 
-export async function login(email, password) {
-    const user = await prisma.user.findUnique({ where: {email} })
+export async function login(identifier, password) {
+    const user = await prisma.user.findFirst({ 
+        where: {
+            OR: [
+                { email: identifier },
+                { username: identifier }
+            ] 
+        } 
+    })
     if (!user) throw new Error("Invalid credentials")
 
     const match = await bcrypt.compare(password, user.passwordHash)

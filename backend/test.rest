@@ -15,9 +15,10 @@ POST {{baseUrl}}/auth/register
 Content-Type: application/json
 
 {
-  "name": "Test User 1",
-  "email": "testuser1@example.com",
-  "password": "password1234"
+  "username": "melvin",
+  "name": "Test User 2",
+  "email": "melvin@example.com",
+  "password": "melvin"
 }
 
 ###
@@ -31,9 +32,18 @@ POST {{baseUrl}}/auth/login
 Content-Type: application/json
 
 {
-  "email": "testuser1@example.com",
+  "identifier": "tester1",
   "password": "password1234"
 }
+
+# # @name login
+# POST {{baseUrl}}/auth/login
+# Content-Type: application/json
+
+# {
+#   "identifier": "tester2",
+#   "password": "password1234"
+# }
 
 ###
 
@@ -42,7 +52,163 @@ Content-Type: application/json
 ########################################
 
 # @name getMe
-GET {{baseUrl}}/users/me
+GET {{baseUrl}}/user/me
 Authorization: Bearer {{token}}
 
 ###
+
+########################################
+# TRIPS: CREATE
+########################################
+
+# @name createTrip
+POST {{baseUrl}}/trip
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "Thailand Trip 2025"
+}
+
+###
+
+########################################
+# TRIPS: GET MY TRIPS
+########################################
+
+GET {{baseUrl}}/trip
+Authorization: Bearer {{token}}
+
+###
+
+########################################
+# TRIPS: GET SPECIFIC TRIP
+########################################
+
+GET {{baseUrl}}/trip/95761412-caa3-45aa-aa14-17c9d0fa20f7
+Authorization: Bearer {{token}}
+
+###
+
+########################################
+# TRIPS: UPDATE TRIP
+########################################
+
+PUT {{baseUrl}}/trip/4c653b6b-32c1-421d-8f09-537535542e80
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "Kyoto Journey"
+}
+
+###
+
+########################################
+# TRIPS: DELETE TRIP
+########################################
+
+DELETE {{baseUrl}}/trip/4c653b6b-32c1-421d-8f09-537535542e80
+Authorization: Bearer {{token}}
+
+###
+########################################
+# TRIP MEMBERS: ADD BY USERNAME
+########################################
+
+POST {{baseUrl}}/tripmember/95761412-caa3-45aa-aa14-17c9d0fa20f7/members
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "username": "melvin"
+}
+########################################
+# EXPENSE: CREATE
+########################################
+
+# @name createExpense
+POST {{baseUrl}}/expense/e9ee23e8-7f11-4415-9fc2-330fdcfecf31
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "description": "Lunch",
+  "amount": 200
+}
+
+###
+
+########################################
+# EXPENSE: GET FOR TRIP
+########################################
+
+GET {{baseUrl}}/expense/95761412-caa3-45aa-aa14-17c9d0fa20f7
+Authorization: Bearer {{token}}
+
+###
+
+########################################
+# EXPENSE: GET DETAIL
+########################################
+
+GET {{baseUrl}}/expense/detail/95761412-caa3-45aa-aa14-17c9d0fa20f7
+Authorization: Bearer {{token}}
+
+###
+
+########################################
+# EXPENSE: UPDATE
+########################################
+
+PUT {{baseUrl}}/expense/detail/{{createExpense.response.body.id}}
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "description": "Updated Lunch",
+  "amount": 300
+}
+
+###
+
+########################################
+# EXPENSE: DELETE
+########################################
+
+DELETE {{baseUrl}}/expense/detail/{{createExpense.response.body.id}}
+Authorization: Bearer {{token}}
+
+###
+# CREATE CUSTOM SPLIT EXPENSE
+POST {{baseUrl}}/expense/95761412-caa3-45aa-aa14-17c9d0fa20f7
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "description": "Bus",
+  "amount": 300,
+  "type": "custom",
+  "splits": [
+    { "username": "marvin", "shareAmount": 120 },
+    { "username": "melvin", "shareAmount": 90 },
+    { "username": "gladys", "shareAmount": 90 }
+  ]
+}
+
+###
+POST {{baseUrl}}/expense/95761412-caa3-45aa-aa14-17c9d0fa20f7
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "description": "Snacks",
+  "amount": 120,
+  "type": "equal_selected",
+  "members": ["marvin", "gladys"]
+}
+
+###
+# GET SETTLEMENT RESULT
+GET {{baseUrl}}/trip/95761412-caa3-45aa-aa14-17c9d0fa20f7/settlement
+Authorization: Bearer {{token}}

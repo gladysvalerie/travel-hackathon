@@ -2,9 +2,11 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import authRoutes from './routes/auth.js'
-// import tripRoutes from './routes/trips.js'
-// import expenseRoutes from './routes/expenses.js'
-// import settlementRoutes from './routes/settlements.js'
+import userRoutes from './routes/user.js'
+import tripRoutes from './routes/trip.js'
+import tripMemberRoutes from './routes/tripMember.js'
+import expenseRoutes from './routes/expense.js'
+import settlementRoutes from './routes/settlement.js'
 
 dotenv.config();
 
@@ -20,9 +22,11 @@ app.get('/', (req, res) => {
 })
 
 app.use('/auth', authRoutes)
-// app.use('/trips', tripRoutes)
-// app.use('/expenses', expenseRoutes)
-// app.use('/settlements', settlementRoutes)
+app.use('/user', userRoutes)
+app.use('/trip', tripRoutes)
+app.use('/tripmember', tripMemberRoutes)
+app.use('/expense', expenseRoutes)
+app.use('/settlement', settlementRoutes)
 
 app.listen(PORT, () => {
     console.log(`Running server in port: ${PORT}`)
