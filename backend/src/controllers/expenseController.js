@@ -5,11 +5,12 @@ export async function createExpense(req, res) {
         console.log("BODY:", req.body); // <--- log here
         console.log("TYPE:", req.body.members);
         const tripId = req.params.tripId;
-        const { description, amount, type, splits, members } = req.body;
+        const { name, description, amount, type, splits, members } = req.body;
 
         const expense = await expenseService.createExpense(
             req.user.userId, 
             tripId,
+            name,
             description,
             amount,
             type,
