@@ -9,8 +9,13 @@
    ```
 
 2. **Configure Environment**
-   - Copy `.env.example` to `.env`
-   - Set `EXPO_PUBLIC_API_BASE_URL` to your backend URL (default: `http://localhost:5000`)
+   - Create `.env` file in the `mobile` directory
+   - Set the following variables:
+     ```env
+     EXPO_PUBLIC_API_BASE_URL=http://localhost:5000
+     EXPO_PUBLIC_OPENAI_API_KEY=your_openai_api_key_here
+     ```
+   - **Note**: `EXPO_PUBLIC_OPENAI_API_KEY` is required for receipt scanning feature
 
 3. **Start Development Server**
    ```bash
@@ -32,27 +37,24 @@ The mobile app requires the backend to be running. Ensure:
 
 ## Receipt Scanning Setup
 
-The receipt scanning feature requires backend implementation:
+✅ **Receipt scanning is now implemented locally in the mobile app!**
 
-1. **Backend Endpoint**: `POST /expense/:tripId/receipts/parse`
-2. **Request Format**: `multipart/form-data` with image file
-3. **Response Format**:
-   ```json
-   {
-     "merchant": "string | null",
-     "date": "string | null",
-     "currency": "string | null",
-     "total": "number | null",
-     "items": [...]
-   }
-   ```
+The receipt scanning feature:
+1. **Uses OpenAI Vision API** to analyze receipt images directly (no OCR needed)
+2. **Extracts structured data** including merchant, date, currency, total, and items
+3. **No backend required** - all processing happens in the mobile app
 
-4. **Backend Implementation Should**:
-   - Use Tesseract OCR to extract text from receipt images
-   - Use OpenAI API (GPT-4 Vision) to parse structured data
-   - Return parsed data in the specified format
+**Setup:**
+- Add `EXPO_PUBLIC_OPENAI_API_KEY` to your `.env` file (see Environment Configuration above)
+- The feature will automatically work once the API key is configured
 
-See `src/api/receiptApi.ts` for implementation details and TODO comments.
+**How it works:**
+- User takes/selects a receipt photo
+- Tesseract OCR extracts all text from the image
+- OpenAI parses the text to extract: merchant, date, currency, total, and items
+- The expense form is auto-filled with the parsed data
+
+See `src/services/receiptParser.ts` for implementation details.
 
 ## Troubleshooting
 
@@ -88,6 +90,8 @@ mobile/
 │   │   ├── members/      # TripMembers
 │   │   ├── settlements/  # TripSettlements
 │   │   └── profile/      # Profile
+│   ├── services/         # Business logic services
+│   │   └── receiptParser.ts  # Receipt OCR and parsing
 │   ├── theme/            # Colors and styling
 │   └── utils/            # Utility functions
 ├── App.tsx               # Main app entry
@@ -109,7 +113,7 @@ All requests include `Authorization: Bearer <token>` header for protected routes
 
 ## Next Steps
 
-1. Implement receipt parsing endpoint on backend
+1. ✅ Receipt parsing is implemented locally
 2. Test all flows end-to-end
 3. Add error handling improvements
 4. Add loading states where needed

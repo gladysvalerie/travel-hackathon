@@ -17,7 +17,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useTrip } from '../../hooks/useTrips';
 import { useCreateExpense } from '../../hooks/useTripExpenses';
-import { receiptApi } from '../../api/receiptApi';
+import { parseReceipt } from '../../services/receiptParser';
 import { SplitModeSelector, SplitMode } from '../../components/SplitModeSelector';
 import { colors } from '../../theme/colors';
 import type { MainStackParamList } from '../../navigation/MainNavigator';
@@ -103,37 +103,70 @@ export default function AddExpenseScreen() {
         return;
       }
 
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        quality: 0.8,
-      });
-
-      if (!result.canceled && result.assets[0]) {
-        setIsScanning(true);
-        try {
-          // TODO: Backend team needs to implement this endpoint
-          const parsedData = await receiptApi.parseReceipt(tripId, result.assets[0].uri);
-          
-          if (parsedData.merchant) {
-            setDescription(`Receipt at ${parsedData.merchant}`);
-          }
-          if (parsedData.total) {
-            setAmount(parsedData.total.toString());
-          }
-          
-          Alert.alert('Success', 'Receipt scanned successfully');
-        } catch (error: any) {
-          Alert.alert(
-            'Scan Failed',
-            error.message || 'Could not parse receipt. Please enter details manually.'
-          );
-        } finally {
-          setIsScanning(false);
-        }
-      }
+      // Show action sheet to choose between camera and library
+      Alert.alert(
+        'Scan Receipt',
+        'Choose an option',
+        [
+          {
+            text: 'Camera',
+            onPress: async () => {
+              const result = await ImagePicker.launchCameraAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: true,
+                quality: 0.8,
+              });
+              if (!result.canceled && result.assets[0]) {
+                await processReceiptImage(result.assets[0].uri);
+              }
+            },
+          },
+          {
+            text: 'Photo Library',
+            onPress: async () => {
+              const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: true,
+                quality: 0.8,
+              });
+              if (!result.canceled && result.assets[0]) {
+                await processReceiptImage(result.assets[0].uri);
+              }
+            },
+          },
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+        ]
+      );
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to scan receipt');
+      setIsScanning(false);
+    }
+  };
+
+  const processReceiptImage = async (imageUri: string) => {
+    setIsScanning(true);
+    try {
+      // Parse receipt locally using Tesseract OCR and OpenAI
+      const parsedData = await parseReceipt(imageUri);
+      
+      if (parsedData.merchant) {
+        setDescription(`Receipt at ${parsedData.merchant}`);
+      }
+      if (parsedData.total) {
+        setAmount(parsedData.total.toString());
+      }
+      
+      Alert.alert('Success', 'Receipt scanned successfully');
+    } catch (error: any) {
+      console.error('Receipt parsing error:', error);
+      Alert.alert(
+        'Scan Failed',
+        error.message || 'Could not parse receipt. Please enter details manually.'
+      );
+    } finally {
       setIsScanning(false);
     }
   };

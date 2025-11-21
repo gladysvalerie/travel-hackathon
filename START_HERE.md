@@ -48,7 +48,10 @@ cd ../mobile
 Create `mobile/.env` with this content:
 ```env
 EXPO_PUBLIC_API_BASE_URL=http://localhost:5000
+EXPO_PUBLIC_OPENAI_API_KEY=your_openai_api_key_here
 ```
+
+**Note**: `EXPO_PUBLIC_OPENAI_API_KEY` is required for receipt scanning feature. Get your API key from https://platform.openai.com/api-keys
 
 **Then install and start:**
 
@@ -138,13 +141,14 @@ npm start -- --clear
 
 ## 📝 Important Notes
 
-1. **Receipt Scanning**: The UI is ready, but backend endpoint needs implementation:
-   - Endpoint: `POST /expense/:tripId/receipts/parse`
-   - Should use Tesseract OCR + OpenAI API
-   - See `mobile/src/api/receiptApi.ts` for details
+1. **Receipt Scanning**: ✅ **Now Implemented Locally in Mobile App!**
+   - Uses Tesseract.js to extract text from receipt images (runs on device)
+   - Uses OpenAI API to parse structured data (items, prices, merchant, total)
+   - **Important**: Add `EXPO_PUBLIC_OPENAI_API_KEY=your_api_key_here` to `mobile/.env` for receipt parsing to work
+   - No backend endpoint needed - all processing happens in the mobile app
 
 2. **Environment Variables**:
-   - Backend `.env`: ✅ Already configured
+   - Backend `.env`: ✅ Already configured (add `OPENAI_API_KEY` for receipt scanning)
    - Mobile `.env`: ⚠️ **You need to create this!**
 
 3. **Database**: Make sure your Prisma database is set up and migrations are run
