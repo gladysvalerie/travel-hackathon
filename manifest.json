@@ -6,9 +6,9 @@
   "action": {
     "default_popup": "src/popup.html",
     "default_icon": {
-      "16": "assets/icon16.png",
-      "48": "assets/icon48.png",
-      "128": "assets/icon128.png"
+      "16": "assets/trip_ledger_icon.png",
+      "48": "assets/trip_ledger_icon.png",
+      "128": "assets/trip_ledger_icon.png"
     }
   },
   "background": {
@@ -18,9 +18,9 @@
   "permissions": ["tabs", "activeTab", "scripting", "storage", "windows"],
   "host_permissions": ["<all_urls>"],
   "icons": {
-    "16": "assets/icon16.png",
-    "48": "assets/icon48.png",
-    "128": "assets/icon128.png"
+    "16": "assets/trip_ledger_icon.png",
+    "48": "assets/trip_ledger_icon.png",
+    "128": "assets/trip_ledger_icon.png"
   },
   "content_scripts": [
     {
