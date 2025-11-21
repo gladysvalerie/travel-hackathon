@@ -1,32 +1,54 @@
 /**
  * Storage helper module
- * Wraps chrome.storage.sync for auth data management
+ * Wraps chrome.storage.sync for auth data and current trip management
  */
 
 /**
- * Save authentication token and email
- * @param {string} token - Auth token
- * @param {string} email - User email
+ * Auth data structure
+ * @typedef {Object} AuthData
+ * @property {string} token - Auth token
+ * @property {string} userId - User ID
+ * @property {string} username - Username
+ * @property {string} [email] - Email address
+ * @property {string} [name] - Full name
  */
-export async function setAuth(token, email) {
+
+/**
+ * Save authentication data
+ * @param {AuthData} auth - Auth data object
+ */
+export async function setAuth(auth) {
   await chrome.storage.sync.set({
-    authToken: token,
-    userEmail: email,
-    isLoggedIn: true
+    authToken: auth.token,
+    userId: auth.userId,
+    username: auth.username,
+    userEmail: auth.email || auth.userEmail, // Support both for backward compatibility
+    userName: auth.name || auth.userName, // Support both
+    isLoggedIn: true,
   });
 }
 
 /**
  * Get authentication data
- * @returns {Promise<{token: string, email: string}|null>}
+ * @returns {Promise<AuthData|null>}
  */
 export async function getAuth() {
-  const data = await chrome.storage.sync.get(['authToken', 'userEmail', 'isLoggedIn']);
+  const data = await chrome.storage.sync.get([
+    'authToken',
+    'userId',
+    'username',
+    'userEmail',
+    'userName',
+    'isLoggedIn'
+  ]);
   
-  if (data.isLoggedIn && data.authToken && data.userEmail) {
+  if (data.isLoggedIn && data.authToken && data.userId && data.username) {
     return {
       token: data.authToken,
-      email: data.userEmail
+      userId: data.userId,
+      username: data.username,
+      email: data.userEmail,
+      name: data.userName,
     };
   }
   
@@ -37,16 +59,52 @@ export async function getAuth() {
  * Clear authentication data (logout)
  */
 export async function clearAuth() {
-  await chrome.storage.sync.remove(['authToken', 'userEmail', 'isLoggedIn']);
+  await chrome.storage.sync.remove([
+    'authToken',
+    'userId',
+    'username',
+    'userEmail',
+    'userName',
+    'isLoggedIn'
+  ]);
+  
+  // Also clear current trip
+  await setCurrentTripId(null);
 }
 
 /**
+ * Set the currently selected trip ID
+ * @param {string|null} tripId - Trip ID or null to clear
+ */
+export async function setCurrentTripId(tripId) {
+  if (tripId) {
+    await chrome.storage.sync.set({ currentTripId: tripId });
+  } else {
+    await chrome.storage.sync.remove(['currentTripId']);
+  }
+}
+
+/**
+ * Get the currently selected trip ID
+ * @returns {Promise<string|null>}
+ */
+export async function getCurrentTripId() {
+  const data = await chrome.storage.sync.get(['currentTripId']);
+  return data.currentTripId || null;
+}
+
+// ==================== LEGACY BOOKINGS STORAGE ====================
+// These are kept for backward compatibility but should eventually be removed
+
+/**
  * Storage key for bookings
+ * @deprecated Use backend expenses instead
  */
 const BOOKINGS_KEY = "tripledger_bookings";
 
 /**
  * Get all bookings
+ * @deprecated Use getExpenses from API instead
  * @returns {Promise<Array>}
  */
 export async function getBookings() {
@@ -59,6 +117,7 @@ export async function getBookings() {
 
 /**
  * Add a new booking
+ * @deprecated Use createExpense from API instead
  * @param {Object} booking - Booking object (must include type field)
  * @returns {Promise<Object>} - Booking with generated ID
  */
@@ -85,6 +144,7 @@ export async function addBooking(booking) {
 
 /**
  * Update an existing booking
+ * @deprecated Use updateExpense from API instead
  * @param {Object} booking - Booking object with id
  * @returns {Promise<Object>} - Updated booking
  */
@@ -123,6 +183,7 @@ export async function updateBooking(booking) {
 
 /**
  * Get a booking by ID
+ * @deprecated Use getExpenseDetail from API instead
  * @param {string} id - Booking ID
  * @returns {Promise<Object|null>} - Booking or null if not found
  */
@@ -130,4 +191,3 @@ export async function getBookingById(id) {
   const bookings = await getBookings();
   return bookings.find(b => b.id === id) || null;
 }
-

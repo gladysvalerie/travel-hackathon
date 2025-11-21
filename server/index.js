@@ -233,7 +233,7 @@ Return ONLY valid JSON with no additional text, markdown, or formatting.`,
       user: `Extract flight booking information from this document and return it as a JSON object with the following EXACT structure:
 {
   "passenger_name": "string or null (passenger name)",
-  "airline": "string or null (airline name like 'EVA Air', 'American Airlines', 'Japan Airlines')",
+  "airline": "string or null (AIRLINE NAME ONLY - e.g., 'EVA Air', 'American Airlines', 'Japan Airlines', 'Cathay Pacific', 'Singapore Airlines'. DO NOT include booking reference, confirmation code, or PNR. Extract ONLY the airline company name.)",
   "flight_number": "string or null (e.g., 'BR196', 'AA123', 'JL123')",
   "origin": "string or null (city name or IATA code like 'TPE', 'NRT', 'Tokyo', 'Taipei')",
   "destination": "string or null (city name or IATA code)",
@@ -251,6 +251,7 @@ CRITICAL RULES:
 - Extract the TOTAL price for the flight, not per person
 - Origin and destination can be city names or IATA codes (both are acceptable)
 - Booking reference can be called: PNR, confirmation code, booking number, reservation code, etc.
+- **AIRLINE FIELD: Extract ONLY the airline company name (e.g., 'EVA Air', 'Cathay Pacific', 'Singapore Airlines'). DO NOT include booking references, confirmation codes, PNR numbers, or any other booking-related information in the airline field. Search for the actual airline name/company name.**
 - Extract data for the PRIMARY flight only if multiple flights are shown`,
     };
   }

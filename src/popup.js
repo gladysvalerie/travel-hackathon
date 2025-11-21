@@ -7,16 +7,37 @@ import {
   setAuth,
   getAuth,
   clearAuth,
+  setCurrentTripId,
+  getCurrentTripId,
   getBookings,
   addBooking,
   updateBooking,
   getBookingById,
 } from "./storage.js";
-import { apiLogin, apiSignup, saveBookingToServer } from "./api.js";
+import {
+  registerUser,
+  loginUser,
+  getMe,
+  getTrips,
+  createTrip,
+  getTripDetail,
+  updateTripName,
+  deleteTrip,
+  addTripMember,
+  createExpense,
+  getExpenses,
+  getExpenseDetail,
+  updateExpense,
+  deleteExpense,
+  saveBookingToServer,
+} from "./api.js";
 import { analyzeBookingScreenshot } from "./aiClient.js";
 
 // View containers
 const authView = document.getElementById("auth-view");
+const tripsView = document.getElementById("trips-view");
+const newTripView = document.getElementById("new-trip-view");
+const tripDetailView = document.getElementById("trip-detail-view");
 const dashboardView = document.getElementById("dashboard-view");
 const regionSelectionView = document.getElementById("region-selection-view");
 const screenshotPreviewView = document.getElementById(
@@ -50,13 +71,19 @@ const tabHistoryContent = document.getElementById("tab-history-content");
 const homeView = document.getElementById("home-view");
 const btnCategoryFlight = document.getElementById("btn-category-flight");
 const btnCategoryHotel = document.getElementById("btn-category-hotel");
-const btnCategoryRestaurant = document.getElementById("btn-category-restaurant");
-const btnCategoryAttraction = document.getElementById("btn-category-attraction");
+const btnCategoryRestaurant = document.getElementById(
+  "btn-category-restaurant"
+);
+const btnCategoryAttraction = document.getElementById(
+  "btn-category-attraction"
+);
 
 // Category actions view elements
 const categoryActionsView = document.getElementById("category-actions-view");
 const categoryActionsTitle = document.getElementById("category-actions-title");
-const btnCategoryScreenshot = document.getElementById("btn-category-screenshot");
+const btnCategoryScreenshot = document.getElementById(
+  "btn-category-screenshot"
+);
 const btnCategoryUpload = document.getElementById("btn-category-upload");
 const btnCategoryManual = document.getElementById("btn-category-manual");
 const btnCategoryBack = document.getElementById("btn-category-back");
@@ -72,8 +99,12 @@ const historyList = document.getElementById("history-list");
 const historyFilterAll = document.getElementById("history-filter-all");
 const historyFilterFlight = document.getElementById("history-filter-flight");
 const historyFilterHotel = document.getElementById("history-filter-hotel");
-const historyFilterRestaurant = document.getElementById("history-filter-restaurant");
-const historyFilterAttraction = document.getElementById("history-filter-attraction");
+const historyFilterRestaurant = document.getElementById(
+  "history-filter-restaurant"
+);
+const historyFilterAttraction = document.getElementById(
+  "history-filter-attraction"
+);
 
 // Screenshot preview elements
 const screenshotPreviewImage = document.getElementById(
@@ -123,6 +154,9 @@ let currentFileName = null;
 // Editing booking ID (null if creating new, ID if editing)
 let editingBookingId = null;
 
+// Current trip data
+let currentTripData = null;
+
 /**
  * Update file preview display
  */
@@ -168,15 +202,16 @@ function removeFile() {
   currentFileName = null;
   updateFilePreview();
   chrome.storage.local.remove(["lastScreenshot", "lastScreenshotRegion"]);
-  
+
   // Update status
   if (screenshotStatus) {
-    screenshotStatus.textContent = "No screenshot; please fill the fields manually.";
+    screenshotStatus.textContent =
+      "No screenshot; please fill the fields manually.";
   }
-  
+
   // Update button text
   if (aiFillBtn) {
-    const buttonTextElement = aiFillBtn.querySelector('.btn-text');
+    const buttonTextElement = aiFillBtn.querySelector(".btn-text");
     if (buttonTextElement) {
       buttonTextElement.textContent = "Extract from screenshot";
     }
@@ -193,7 +228,9 @@ function updateGoogleMapsButtons() {
     restaurantBtn.style.display = restaurantUrl ? "flex" : "none";
   }
 
-  const attractionUrl = document.getElementById("field-google-maps-url-attraction")?.value;
+  const attractionUrl = document.getElementById(
+    "field-google-maps-url-attraction"
+  )?.value;
   const attractionBtn = document.getElementById("btn-open-gmaps-attraction");
   if (attractionBtn) {
     attractionBtn.style.display = attractionUrl ? "flex" : "none";
@@ -209,17 +246,21 @@ function saveFormData() {
   }
 
   const formData = {};
-  const formElement = document.getElementById(`manual-form-${currentCategoryType}`);
+  const formElement = document.getElementById(
+    `manual-form-${currentCategoryType}`
+  );
   if (!formElement) return;
 
   // Get all inputs, selects, and textareas in the form
-  const inputs = formElement.querySelectorAll('input:not([type="file"]), select, textarea');
-  inputs.forEach(input => {
+  const inputs = formElement.querySelectorAll(
+    'input:not([type="file"]), select, textarea'
+  );
+  inputs.forEach((input) => {
     if (input.id) {
-      if (input.type === 'checkbox') {
+      if (input.type === "checkbox") {
         formData[input.id] = input.checked;
-      } else if (input.type === 'number') {
-        formData[input.id] = input.value ? parseFloat(input.value) : '';
+      } else if (input.type === "number") {
+        formData[input.id] = input.value ? parseFloat(input.value) : "";
       } else {
         formData[input.id] = input.value;
       }
@@ -232,7 +273,7 @@ function saveFormData() {
   }
 
   chrome.storage.local.set({
-    [`formData_${currentCategoryType}`]: formData
+    [`formData_${currentCategoryType}`]: formData,
   });
 }
 
@@ -249,10 +290,13 @@ function restoreFormData() {
     if (!formData) return;
 
     // Restore all form fields
-    Object.keys(formData).forEach(fieldId => {
-      if (fieldId === 'dishes') {
+    Object.keys(formData).forEach((fieldId) => {
+      if (fieldId === "dishes") {
         // Handle dishes separately
-        if (currentCategoryType === "restaurant" && Array.isArray(formData.dishes)) {
+        if (
+          currentCategoryType === "restaurant" &&
+          Array.isArray(formData.dishes)
+        ) {
           extractedDishes = formData.dishes;
           renderDishesList();
         }
@@ -261,12 +305,12 @@ function restoreFormData() {
 
       const field = document.getElementById(fieldId);
       if (field) {
-        if (field.type === 'checkbox') {
+        if (field.type === "checkbox") {
           field.checked = formData[fieldId];
-        } else if (field.type === 'number') {
-          field.value = formData[fieldId] || '';
+        } else if (field.type === "number") {
+          field.value = formData[fieldId] || "";
         } else {
-          field.value = formData[fieldId] || '';
+          field.value = formData[fieldId] || "";
         }
       }
     });
@@ -280,16 +324,23 @@ function saveViewState() {
   // Determine current view
   let currentView = "home";
   let activeTab = "add";
-  
+
   // First, check which tab is active
-  const isHistoryTabActive = tabHistory && tabHistory.classList.contains("active");
+  const isHistoryTabActive =
+    tabHistory && tabHistory.classList.contains("active");
   const isAddTabActive = tabAdd && tabAdd.classList.contains("active");
-  
-  if (isHistoryTabActive || (tabHistoryContent && !tabHistoryContent.classList.contains("hidden"))) {
+
+  if (
+    isHistoryTabActive ||
+    (tabHistoryContent && !tabHistoryContent.classList.contains("hidden"))
+  ) {
     // We're on the History tab
     currentView = "history";
     activeTab = "history";
-  } else if (isAddTabActive || (tabAddContent && !tabAddContent.classList.contains("hidden"))) {
+  } else if (
+    isAddTabActive ||
+    (tabAddContent && !tabAddContent.classList.contains("hidden"))
+  ) {
     // We're on the Add tab - check which view within Add tab
     if (!manualFormView.classList.contains("hidden")) {
       currentView = "manualForm";
@@ -324,7 +375,8 @@ function saveViewState() {
       view: currentView,
       categoryType: currentCategoryType,
       activeTab: activeTab,
-      inManualFormWithScreenshot: !manualFormView.classList.contains("hidden") && !!lastScreenshotDataUrl,
+      inManualFormWithScreenshot:
+        !manualFormView.classList.contains("hidden") && !!lastScreenshotDataUrl,
     },
   });
 }
@@ -375,11 +427,13 @@ async function restoreViewState() {
         if (dashboardView) dashboardView.classList.add("hidden");
         if (authView) authView.classList.add("hidden");
         if (regionSelectionView) regionSelectionView.classList.add("hidden");
-        if (screenshotPreviewView) screenshotPreviewView.classList.add("hidden");
+        if (screenshotPreviewView)
+          screenshotPreviewView.classList.add("hidden");
         if (categoryActionsView) categoryActionsView.classList.add("hidden");
         if (homeView) homeView.classList.add("hidden");
-        
-        const fromScreenshot = state.inManualFormWithScreenshot && !!lastScreenshotDataUrl;
+
+        const fromScreenshot =
+          state.inManualFormWithScreenshot && !!lastScreenshotDataUrl;
         showManualFormView(state.categoryType, { fromScreenshot });
         manualFormView.classList.remove("hidden");
         screenshotPreviewView.classList.add("hidden");
@@ -388,19 +442,21 @@ async function restoreViewState() {
         if (tabHistoryContent) tabHistoryContent.classList.add("hidden");
         if (tabAdd) tabAdd.classList.add("active");
         if (tabHistory) tabHistory.classList.remove("active");
-        
+
         // Restore form data after a short delay to ensure form is rendered
         setTimeout(() => {
           restoreFormData();
         }, 100);
-        
+
         return true;
       }
     } else if (state.view === "categoryActions" && state.categoryType) {
       showCategoryActionsView(state.categoryType);
       return true;
     } else if (state.view === "screenshotPreview") {
-      const screenshotResult = await chrome.storage.local.get(["lastScreenshot"]);
+      const screenshotResult = await chrome.storage.local.get([
+        "lastScreenshot",
+      ]);
       if (screenshotResult.lastScreenshot) {
         showScreenshotPreview(screenshotResult.lastScreenshot);
         return true;
@@ -428,43 +484,218 @@ function clearViewState() {
 }
 
 /**
+ * Show auth error message
+ */
+function showAuthError(message) {
+  // Try to find or create error element in login view
+  let errorEl =
+    document.getElementById("login-error") ||
+    document.getElementById("signup-error");
+  if (!errorEl) {
+    errorEl = document.createElement("div");
+    errorEl.id = "login-error";
+    errorEl.className = "form-error";
+    if (loginView && !loginView.classList.contains("hidden")) {
+      loginView.appendChild(errorEl);
+    } else if (signupView && !signupView.classList.contains("hidden")) {
+      signupView.appendChild(errorEl);
+    }
+  }
+  errorEl.textContent = message;
+  errorEl.classList.remove("hidden");
+}
+
+/**
+ * Hide auth error message
+ */
+function hideAuthError() {
+  const errorEl =
+    document.getElementById("login-error") ||
+    document.getElementById("signup-error");
+  if (errorEl) {
+    errorEl.classList.add("hidden");
+  }
+}
+
+/**
+ * Setup header profile dropdown
+ */
+function setupHeaderProfile() {
+  const headerProfileBtn = document.getElementById("header-profile-btn");
+  const headerProfileDropdown = document.getElementById(
+    "header-profile-dropdown"
+  );
+  const headerProfileEdit = document.getElementById("header-profile-edit");
+  const headerProfileLogout = document.getElementById("header-profile-logout");
+
+  // Update header profile on init
+  getAuth().then((auth) => {
+    if (auth) {
+      updateHeaderProfile(auth);
+    }
+  });
+
+  // Toggle dropdown on click
+  if (headerProfileBtn && headerProfileDropdown) {
+    headerProfileBtn.addEventListener(
+      "click",
+      (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const isHidden = headerProfileDropdown.classList.contains("hidden");
+
+        // Close other dropdowns
+        document.querySelectorAll(".header-profile-dropdown").forEach((dd) => {
+          if (dd !== headerProfileDropdown) {
+            dd.classList.add("hidden");
+          }
+        });
+
+        // Toggle this dropdown
+        headerProfileDropdown.classList.toggle("hidden", !isHidden);
+      },
+      { passive: false }
+    );
+  }
+
+  // Close dropdown when clicking outside
+  document.addEventListener("click", (e) => {
+    if (
+      headerProfileDropdown &&
+      !headerProfileDropdown.contains(e.target) &&
+      headerProfileBtn &&
+      !headerProfileBtn.contains(e.target)
+    ) {
+      headerProfileDropdown.classList.add("hidden");
+    }
+  });
+
+  // Edit profile button
+  if (headerProfileEdit) {
+    headerProfileEdit.addEventListener(
+      "click",
+      (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (headerProfileDropdown)
+          headerProfileDropdown.classList.add("hidden");
+        showProfileEditModal();
+      },
+      { passive: false }
+    );
+  }
+
+  // Logout button
+  if (headerProfileLogout) {
+    headerProfileLogout.addEventListener(
+      "click",
+      async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (headerProfileDropdown)
+          headerProfileDropdown.classList.add("hidden");
+        await clearAuth();
+        await setCurrentTripId(null);
+        showAuthView();
+      },
+      { passive: false }
+    );
+  }
+}
+
+/**
+ * Update header profile display
+ */
+function updateHeaderProfile(userData) {
+  if (!userData) return;
+
+  const headerProfilePicture = document.getElementById(
+    "header-profile-picture"
+  );
+  const dropdownProfilePicture = document.getElementById(
+    "dropdown-profile-picture"
+  );
+  const dropdownProfileName = document.getElementById("dropdown-profile-name");
+  const dropdownProfileEmail = document.getElementById(
+    "dropdown-profile-email"
+  );
+
+  // Get initials
+  const name =
+    userData.name || userData.username || userData.email?.split("@")[0] || "U";
+  const initials = name.substring(0, 2).toUpperCase();
+
+  if (headerProfilePicture) {
+    headerProfilePicture.textContent = initials;
+  }
+
+  if (dropdownProfilePicture) {
+    dropdownProfilePicture.textContent = initials;
+  }
+
+  if (dropdownProfileName) {
+    dropdownProfileName.textContent =
+      userData.name || userData.username || userData.email?.split("@")[0] || "";
+  }
+
+  if (dropdownProfileEmail) {
+    dropdownProfileEmail.textContent = userData.email || "";
+  }
+}
+
+/**
  * Initialize popup on load
  */
 async function init() {
-  // Check if user is logged in
+  // Immediately hide auth view to prevent flash
+  authView.classList.add("hidden");
+
+  // Attach event listeners FIRST - make UI responsive immediately
+  attachEventListeners();
+  setupHeaderProfile();
+
+  // Check if user is logged in (non-blocking)
   const auth = await getAuth();
 
   if (auth) {
-    // Try to restore previous view state FIRST, before showing dashboard
-    const stateRestored = await restoreViewState();
-    
-    // Only show dashboard if we didn't restore to a specific view
-    if (!stateRestored) {
-      await showDashboardView();
-      await checkForPendingScreenshot();
+    // Immediately show trips view (optimistic loading) - don't wait for API calls
+    const tripId = await getCurrentTripId();
+    if (tripId) {
+      // Show trip detail view without waiting for auth check
+      showTripDetailView(tripId).catch((err) => {
+        console.error("Error loading trip detail:", err);
+        showTripsView().catch(console.error);
+      });
     } else {
-      // If we restored to a view, still update profile display but don't change views
-      const authData = await getAuth();
-      if (authData && userEmailSpan) {
-        userEmailSpan.textContent = authData.email;
-      }
-      
-      // If we restored to manual form, check for screenshot but don't show preview
-      const screenshotResult = await chrome.storage.local.get(["lastScreenshot", "pendingScreenshot"]);
-      if (screenshotResult.lastScreenshot) {
-        lastScreenshotDataUrl = screenshotResult.lastScreenshot;
-        // Clear pending flag if we're already in manual form
-        if (screenshotResult.pendingScreenshot && !manualFormView.classList.contains("hidden")) {
-          chrome.storage.local.set({ pendingScreenshot: false });
-        }
-      }
+      showTripsView().catch(console.error);
     }
+
+    // Verify token in background (non-blocking) - don't await
+    getMe(auth.token)
+      .then((user) => {
+        // Update auth data with latest user info
+        setAuth({
+          token: auth.token,
+          userId: user.id,
+          username: user.username,
+          email: user.email,
+          name: user.name,
+        }).then(() => {
+          updateProfileDisplay(user);
+          updateHeaderProfile(user);
+        });
+      })
+      .catch((error) => {
+        // Token invalid, clear auth and show login (in background)
+        console.error("Auth check failed:", error);
+        clearAuth().then(() => {
+          showAuthView();
+        });
+      });
   } else {
+    // No auth, show login
     showAuthView();
   }
-
-  // Attach event listeners
-  attachEventListeners();
 
   // Listen for messages from background script (for screenshot capture)
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -571,10 +802,994 @@ async function checkForPendingScreenshot() {
  */
 function showAuthView() {
   authView.classList.remove("hidden");
+  tripsView?.classList.add("hidden");
+  newTripView?.classList.add("hidden");
+  tripDetailView?.classList.add("hidden");
   dashboardView.classList.add("hidden");
   regionSelectionView.classList.add("hidden");
   screenshotPreviewView.classList.add("hidden");
   manualFormView.classList.add("hidden");
+  hideAuthError();
+}
+
+/**
+ * Show trips list view
+ */
+async function showTripsView() {
+  authView.classList.add("hidden");
+  newTripView?.classList.add("hidden");
+  tripDetailView?.classList.add("hidden");
+  dashboardView.classList.add("hidden");
+  regionSelectionView.classList.add("hidden");
+  screenshotPreviewView.classList.add("hidden");
+  manualFormView.classList.add("hidden");
+
+  if (tripsView) {
+    tripsView.classList.remove("hidden");
+    await loadTripsList();
+  }
+}
+
+/**
+ * Load and display trips list
+ */
+async function loadTripsList() {
+  const tripsList = document.getElementById("trips-list");
+  const tripsError = document.getElementById("trips-error");
+
+  if (!tripsList) return;
+
+  tripsList.innerHTML = '<div class="loading">Loading trips...</div>';
+  if (tripsError) tripsError.classList.add("hidden");
+
+  try {
+    const auth = await getAuth();
+    if (!auth || !auth.token) {
+      showAuthView();
+      return;
+    }
+
+    const trips = await getTrips(auth.token);
+
+    if (trips.length === 0) {
+      tripsList.innerHTML = `
+        <div class="empty-state">
+          <p>No trips yet. Create your first trip!</p>
+        </div>
+      `;
+      return;
+    }
+
+    tripsList.innerHTML = trips
+      .map((trip) => {
+        const tripDate = trip.tripDate || trip.createdAt || trip.created_at;
+        const dateStr = tripDate
+          ? new Date(tripDate).toLocaleDateString("en-US", {
+              year: "numeric",
+              month: "short",
+              day: "numeric",
+            })
+          : "No date set";
+
+        // Get member count from trip data
+        // Backend now includes members in the response
+        let memberCount = 1; // Default to 1 (creator is always a member)
+        if (trip.members && Array.isArray(trip.members)) {
+          memberCount = trip.members.length;
+        } else if (trip.members && typeof trip.members === "object") {
+          // Handle case where members might be an object
+          memberCount = Object.keys(trip.members).length;
+        }
+        // Ensure at least 1 member (creator)
+        if (memberCount < 1) memberCount = 1;
+
+        return `
+      <div class="trip-item" data-trip-id="${trip.id}">
+        <div class="trip-item-content">
+          <div class="trip-item-name">${escapeHtml(trip.name)}</div>
+          <div class="trip-item-meta">
+            <span class="trip-item-date">📅 ${dateStr}</span>
+            <span class="trip-item-members">👥 ${memberCount} member(s)</span>
+          </div>
+        </div>
+        <button type="button" class="trip-item-delete" data-trip-id="${trip.id}" title="Delete trip">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+            <polyline points="3 6 5 6 21 6" />
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+          </svg>
+        </button>
+      </div>
+    `;
+      })
+      .join("");
+
+    // Attach click handlers
+    tripsList.querySelectorAll(".trip-item").forEach((item) => {
+      const tripId = item.dataset.tripId;
+      item.addEventListener("click", (e) => {
+        if (!e.target.closest(".trip-item-delete")) {
+          showTripDetailView(tripId);
+        }
+      });
+    });
+
+    // Attach delete handlers
+    tripsList.querySelectorAll(".trip-item-delete").forEach((btn) => {
+      btn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const tripId = btn.dataset.tripId;
+        if (confirm("Are you sure you want to delete this trip?")) {
+          await deleteTripHandler(tripId);
+        }
+      });
+    });
+  } catch (error) {
+    console.error("Error loading trips:", error);
+    if (tripsError) {
+      tripsError.textContent = error.message || "Failed to load trips";
+      tripsError.classList.remove("hidden");
+    }
+    tripsList.innerHTML =
+      '<div class="error-message">Failed to load trips</div>';
+  }
+}
+
+/**
+ * Delete a trip
+ */
+async function deleteTripHandler(tripId) {
+  try {
+    const auth = await getAuth();
+    if (!auth || !auth.token) {
+      showAuthView();
+      return;
+    }
+
+    await deleteTrip(auth.token, tripId);
+
+    // Clear current trip if it was deleted
+    const currentTripId = await getCurrentTripId();
+    if (currentTripId === tripId) {
+      await setCurrentTripId(null);
+      currentTripData = null;
+    }
+
+    // Reload trips list
+    await loadTripsList();
+  } catch (error) {
+    console.error("Error deleting trip:", error);
+    alert("Failed to delete trip: " + error.message);
+  }
+}
+
+// showNewTripView is now defined above with updateTripMembersPreview
+
+/**
+ * Show trip detail view
+ */
+async function showTripDetailView(tripId) {
+  // Hide all views
+  authView.classList.add("hidden");
+  tripsView?.classList.add("hidden");
+  newTripView?.classList.add("hidden");
+  dashboardView.classList.add("hidden");
+  regionSelectionView.classList.add("hidden");
+  screenshotPreviewView.classList.add("hidden");
+  manualFormView.classList.add("hidden");
+
+  if (!tripDetailView) return;
+
+  // Show trip detail view
+  tripDetailView.classList.remove("hidden");
+
+  // Make absolutely sure dashboard is hidden
+  if (dashboardView) {
+    dashboardView.style.display = "none";
+  }
+
+  try {
+    const auth = await getAuth();
+    if (!auth || !auth.token) {
+      showAuthView();
+      return;
+    }
+
+    // Profile section removed - using header profile icon instead
+
+    // Set as current trip
+    await setCurrentTripId(tripId);
+
+    // Show loading state for trip name
+    let tripNameEl = document.getElementById("trip-detail-name");
+    if (tripNameEl) {
+      tripNameEl.textContent = "Loading...";
+    }
+
+    // Load trip data
+    const trip = await getTripDetail(auth.token, tripId);
+    currentTripData = trip;
+
+    // Load trip date from local storage if available
+    const tripDateData = await chrome.storage.local.get([
+      `trip_${tripId}_date`,
+    ]);
+    if (tripDateData[`trip_${tripId}_date`]) {
+      trip.tripDate = tripDateData[`trip_${tripId}_date`];
+    }
+
+    // Update trip name display
+    tripNameEl = document.getElementById("trip-detail-name");
+    if (tripNameEl) {
+      tripNameEl.textContent = trip.name || "Unnamed Trip";
+    }
+
+    // Load members (initially hidden, shown when clicking trip name)
+    loadTripMembers(trip.members || [], auth);
+
+    // Load expenses for trip expenses tab
+    await loadTripExpensesHistory(tripId);
+  } catch (error) {
+    console.error("Error loading trip detail:", error);
+    alert("Failed to load trip: " + error.message);
+    await showTripsView();
+  }
+}
+
+// Profile section removed - using header profile icon instead
+
+/**
+ * Load trip expenses for history tab
+ */
+async function loadTripExpensesHistory(tripId, filterType = "all") {
+  const historyListTrip = document.getElementById("history-list-trip");
+  if (!historyListTrip) return;
+
+  // Show loading state
+  historyListTrip.innerHTML = '<div class="loading">Loading expenses...</div>';
+
+  try {
+    const auth = await getAuth();
+    if (!auth || !auth.token) return;
+
+    const expenses = await getExpenses(auth.token, tripId);
+
+    // Filter by category
+    let filteredExpenses = expenses;
+    if (filterType !== "all") {
+      filteredExpenses = expenses.filter((e) => e.category === filterType);
+    }
+
+    // Render expenses (similar to loadHistoryBookings but for trip detail view)
+    if (filteredExpenses.length === 0) {
+      historyListTrip.innerHTML =
+        '<div class="empty-state">No expenses yet</div>';
+      return;
+    }
+
+    // Sort by date
+    const sortedExpenses = filteredExpenses.sort((a, b) => {
+      const dateA = new Date(a.createdAt || a.created_at || 0);
+      const dateB = new Date(b.createdAt || b.created_at || 0);
+      return dateB - dateA;
+    });
+
+    // Clear existing content
+    historyListTrip.innerHTML = "";
+
+    sortedExpenses.forEach((expense) => {
+      const dateValue =
+        expense.createdAt || expense.created_at || new Date().toISOString();
+      const dateObj = new Date(dateValue);
+      const dateStr = dateObj.toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      });
+
+      const card = document.createElement("div");
+      card.className = "history-card";
+      card.dataset.expenseId = expense.id;
+      // Make card clickable to edit
+      card.style.cursor = "pointer";
+
+      const badge = document.createElement("span");
+      badge.className = "history-badge history-badge-default";
+      badge.textContent = "Expense";
+
+      const title = document.createElement("div");
+      title.className = "history-title";
+      title.textContent = expense.description || "Untitled Expense";
+
+      const date = document.createElement("div");
+      date.className = "history-date";
+      date.textContent = dateStr;
+
+      const price = document.createElement("div");
+      price.className = "history-price";
+      price.textContent = `$${new Intl.NumberFormat().format(expense.amount || 0)}`;
+
+      const actions = document.createElement("div");
+      actions.className = "history-actions";
+
+      // Remove edit button - card is clickable instead
+      // Add click handler to card for editing
+      card.addEventListener("click", async (e) => {
+        // Don't trigger if clicking delete button
+        if (!e.target.closest(".btn-delete-booking")) {
+          await editExpense(expense.id);
+        }
+      });
+
+      const deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
+      deleteBtn.className = "btn-delete-booking btn-delete-expense";
+      deleteBtn.title = "Delete";
+      deleteBtn.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
+          <polyline points="3 6 5 6 21 6"></polyline>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+        </svg>
+      `;
+      deleteBtn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        if (confirm("Are you sure you want to delete this expense?")) {
+          await deleteExpenseHandler(expense.id);
+          // Reload expenses
+          await loadTripExpensesHistory(tripId, filterType);
+        }
+      });
+
+      actions.appendChild(deleteBtn);
+
+      card.appendChild(badge);
+      card.appendChild(title);
+      card.appendChild(date);
+      card.appendChild(price);
+      card.appendChild(actions);
+
+      historyListTrip.appendChild(card);
+    });
+  } catch (error) {
+    console.error("Error loading trip expenses:", error);
+    if (historyListTrip) {
+      historyListTrip.innerHTML =
+        '<div class="error-message">Failed to load expenses</div>';
+    }
+  }
+}
+
+/**
+ * Load and display trip members
+ */
+function loadTripMembers(members, auth) {
+  const membersList = document.getElementById("trip-members-list");
+  if (!membersList) return;
+
+  if (members.length === 0) {
+    membersList.innerHTML = '<div class="empty-state">No members yet</div>';
+    return;
+  }
+
+  // Show current user first, then others
+  const currentUserId = auth?.userId;
+  const sortedMembers = [...members].sort((a, b) => {
+    const aIsCurrent = (a.userId || a.user?.id) === currentUserId;
+    const bIsCurrent = (b.userId || b.user?.id) === currentUserId;
+    if (aIsCurrent && !bIsCurrent) return -1;
+    if (!aIsCurrent && bIsCurrent) return 1;
+    return 0;
+  });
+
+  membersList.innerHTML = sortedMembers
+    .map((member) => {
+      const memberUser = member.user || member;
+      const username = memberUser.username || memberUser.name || "Unknown";
+      const isCurrentUser = (memberUser.id || member.userId) === currentUserId;
+
+      return `
+      <div class="trip-member-item ${isCurrentUser ? "current-user" : ""}">
+        <span class="trip-member-name">${escapeHtml(username)}</span>
+        ${isCurrentUser ? '<span class="member-badge">You</span>' : ""}
+      </div>
+    `;
+    })
+    .join("");
+}
+
+// loadTripMembers function is defined above with (members, auth) parameters
+
+/**
+ * Helper to escape HTML
+ */
+function escapeHtml(text) {
+  const div = document.createElement("div");
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+/**
+ * Show loading overlay with message
+ */
+function showLoadingOverlay(message = "Loading...") {
+  // Remove existing overlay if any
+  let overlay = document.getElementById("loading-overlay");
+  if (overlay) {
+    overlay.remove();
+  }
+
+  overlay = document.createElement("div");
+  overlay.id = "loading-overlay";
+  overlay.className = "loading-overlay";
+  overlay.innerHTML = `
+    <div class="loading-overlay-content">
+      <div class="loading-spinner-large"></div>
+      <div class="loading-message">${escapeHtml(message)}</div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  setTimeout(() => overlay.classList.add("active"), 10);
+}
+
+/**
+ * Hide loading overlay
+ */
+function hideLoadingOverlay() {
+  const overlay = document.getElementById("loading-overlay");
+  if (overlay) {
+    overlay.classList.remove("active");
+    setTimeout(() => overlay.remove(), 300);
+  }
+}
+
+/**
+ * Show success animation with checkmark
+ */
+function showSuccessAnimation(message = "Success!") {
+  // Remove existing success overlay if any
+  let successOverlay = document.getElementById("success-overlay");
+  if (successOverlay) {
+    successOverlay.remove();
+  }
+
+  successOverlay = document.createElement("div");
+  successOverlay.id = "success-overlay";
+  successOverlay.className = "success-overlay";
+  successOverlay.innerHTML = `
+    <div class="success-overlay-content">
+      <div class="success-checkmark">
+        <svg viewBox="0 0 52 52" class="checkmark-svg">
+          <circle class="checkmark-circle" cx="26" cy="26" r="25" fill="none"/>
+          <path class="checkmark-check" fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
+        </svg>
+      </div>
+      <div class="success-message">${escapeHtml(message)}</div>
+    </div>
+  `;
+  document.body.appendChild(successOverlay);
+  setTimeout(() => successOverlay.classList.add("active"), 10);
+
+  // Auto-hide after 2 seconds
+  setTimeout(() => {
+    if (successOverlay) {
+      successOverlay.classList.remove("active");
+      setTimeout(() => successOverlay.remove(), 500);
+    }
+  }, 2000);
+}
+
+// Store invited members for new trip creation
+let invitedMembersForTrip = [];
+
+/**
+ * Handle create trip form submission
+ */
+async function handleCreateTrip() {
+  const tripNameInput = document.getElementById("trip-name-input");
+  const tripDateInput = document.getElementById("trip-date-input");
+  const newTripError = document.getElementById("new-trip-error");
+
+  const tripName = tripNameInput?.value.trim() || "";
+  const tripDate = tripDateInput?.value || null;
+
+  if (!tripName) {
+    if (newTripError) {
+      newTripError.textContent = "Trip name is required";
+      newTripError.classList.remove("hidden");
+    }
+    return;
+  }
+
+  // Show loading state
+  if (newTripError) newTripError.classList.add("hidden");
+  const createTripBtn = document.getElementById("btn-create-trip");
+  const originalBtnText = createTripBtn?.innerHTML;
+  if (createTripBtn) {
+    createTripBtn.disabled = true;
+    createTripBtn.innerHTML =
+      '<span class="loading-spinner"></span> Creating...';
+  }
+
+  try {
+    const auth = await getAuth();
+    if (!auth || !auth.token) {
+      showAuthView();
+      return;
+    }
+
+    // Create trip
+    const trip = await createTrip(auth.token, { name: tripName });
+
+    // Store trip date locally (backend doesn't support it yet)
+    if (tripDate) {
+      trip.tripDate = tripDate;
+      await chrome.storage.local.set({ [`trip_${trip.id}_date`]: tripDate });
+    }
+
+    // Add members from invitedMembersForTrip sequentially to avoid race conditions
+    if (invitedMembersForTrip.length > 0) {
+      for (const username of invitedMembersForTrip) {
+        try {
+          await addTripMember(auth.token, trip.id, { username });
+          // Small delay to avoid overwhelming the server
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        } catch (error) {
+          console.warn(`Failed to add member ${username}:`, error);
+          // Continue with other members - don't fail the entire trip creation
+        }
+      }
+    }
+
+    // Clear invited members
+    invitedMembersForTrip = [];
+
+    // Navigate to trip detail view
+    await showTripDetailView(trip.id);
+  } catch (error) {
+    console.error("Error creating trip:", error);
+    if (newTripError) {
+      const errorMsg = error.message || "Failed to create trip";
+      // Check if it's a network error
+      if (errorMsg.includes("fetch") || errorMsg.includes("Failed to fetch")) {
+        newTripError.textContent =
+          "Network error. Please check your connection and try again.";
+      } else {
+        newTripError.textContent = errorMsg;
+      }
+      newTripError.classList.remove("hidden");
+    }
+  } finally {
+    // Restore button state
+    if (createTripBtn && originalBtnText) {
+      createTripBtn.disabled = false;
+      createTripBtn.innerHTML = originalBtnText;
+    }
+  }
+}
+
+/**
+ * Handle add member to trip creation
+ */
+async function handleAddTripMember() {
+  const tripMemberUsernameInput = document.getElementById(
+    "trip-member-username-input"
+  );
+  const tripMemberError = document.getElementById("trip-member-error");
+  const tripMembersPreview = document.getElementById("trip-members-preview");
+
+  const identifier = tripMemberUsernameInput?.value.trim() || "";
+
+  if (!identifier) {
+    if (tripMemberError) {
+      tripMemberError.textContent = "Please enter a username or email";
+      tripMemberError.classList.remove("hidden");
+    }
+    return;
+  }
+
+  try {
+    const auth = await getAuth();
+    if (!auth || !auth.token) {
+      showAuthView();
+      return;
+    }
+
+    // Check if user exists by trying to get their info
+    // Since we don't have a direct endpoint, we'll try to add them and catch the error
+    // For now, just add to the list and validate when creating the trip
+
+    // Check if already in list
+    if (invitedMembersForTrip.includes(identifier)) {
+      if (tripMemberError) {
+        tripMemberError.textContent = "User already in the list";
+        tripMemberError.classList.remove("hidden");
+      }
+      return;
+    }
+
+    // Add to list
+    invitedMembersForTrip.push(identifier);
+
+    // Clear input
+    if (tripMemberUsernameInput) tripMemberUsernameInput.value = "";
+    if (tripMemberError) tripMemberError.classList.add("hidden");
+
+    // Update preview
+    await updateTripMembersPreview(tripMembersPreview);
+  } catch (error) {
+    console.error("Error adding trip member:", error);
+    if (tripMemberError) {
+      tripMemberError.textContent = error.message || "Failed to add member";
+      tripMemberError.classList.remove("hidden");
+    }
+  }
+}
+
+/**
+ * Update trip members preview in new trip form
+ */
+function updateTripMembersPreview(container) {
+  if (!container) return;
+
+  const auth = getAuth().then((authData) => {
+    if (!authData) return;
+
+    const allMembers = [authData.username, ...invitedMembersForTrip];
+
+    container.innerHTML = allMembers
+      .map(
+        (member, index) => `
+      <div class="trip-member-preview-item ${index === 0 ? "current-user" : ""}">
+        <span class="member-name">${escapeHtml(member)}</span>
+        ${index > 0 ? `<button type="button" class="btn-remove-member" data-member="${escapeHtml(member)}" title="Remove">×</button>` : '<span class="member-badge">You</span>'}
+      </div>
+    `
+      )
+      .join("");
+
+    // Attach remove handlers
+    container.querySelectorAll(".btn-remove-member").forEach((btn) => {
+      btn.addEventListener("click", async (e) => {
+        const member = btn.dataset.member;
+        if (member) {
+          invitedMembersForTrip = invitedMembersForTrip.filter(
+            (m) => m !== member
+          );
+          await updateTripMembersPreview(container);
+        }
+      });
+    });
+  });
+}
+
+/**
+ * Show new trip form view
+ */
+async function showNewTripView() {
+  authView.classList.add("hidden");
+  tripsView?.classList.add("hidden");
+  tripDetailView?.classList.add("hidden");
+  dashboardView.classList.add("hidden");
+  regionSelectionView.classList.add("hidden");
+  screenshotPreviewView.classList.add("hidden");
+  manualFormView.classList.add("hidden");
+
+  if (newTripView) {
+    newTripView.classList.remove("hidden");
+    const tripNameInput = document.getElementById("trip-name-input");
+    const tripDateInput = document.getElementById("trip-date-input");
+    const tripMemberUsernameInput = document.getElementById(
+      "trip-member-username-input"
+    );
+    const newTripError = document.getElementById("new-trip-error");
+    const tripMemberError = document.getElementById("trip-member-error");
+    const tripMembersPreview = document.getElementById("trip-members-preview");
+
+    // Reset
+    invitedMembersForTrip = [];
+    if (tripNameInput) tripNameInput.value = "";
+    if (tripDateInput) tripDateInput.value = "";
+    if (tripMemberUsernameInput) tripMemberUsernameInput.value = "";
+    if (newTripError) {
+      newTripError.classList.add("hidden");
+      newTripError.textContent = "";
+    }
+    if (tripMemberError) {
+      tripMemberError.classList.add("hidden");
+      tripMemberError.textContent = "";
+    }
+
+    // Initialize members preview with current user
+    await updateTripMembersPreview(tripMembersPreview);
+  }
+}
+
+/**
+ * Handle update trip name
+ */
+async function handleUpdateTripName() {
+  const tripNameEditInput = document.getElementById("trip-name-edit-input");
+  const tripNameEditContainer = document.getElementById(
+    "trip-name-edit-container"
+  );
+  const tripDetailName = document.getElementById("trip-detail-name");
+
+  const newName = tripNameEditInput?.value.trim() || "";
+
+  if (!newName) {
+    alert("Trip name cannot be empty");
+    return;
+  }
+
+  try {
+    const auth = await getAuth();
+    if (!auth || !auth.token) {
+      showAuthView();
+      return;
+    }
+
+    const tripId = await getCurrentTripId();
+    if (!tripId) {
+      alert("No trip selected");
+      return;
+    }
+
+    await updateTripName(auth.token, tripId, { name: newName });
+
+    // Update display
+    if (tripDetailName) tripDetailName.textContent = newName;
+    if (tripNameEditContainer) tripNameEditContainer.classList.add("hidden");
+    if (tripDetailName) tripDetailName.style.display = "";
+
+    // Reload trip detail
+    await showTripDetailView(tripId);
+  } catch (error) {
+    console.error("Error updating trip name:", error);
+    alert("Failed to update trip name: " + error.message);
+  }
+}
+
+/**
+ * Handle add member to trip
+ */
+async function handleAddMember() {
+  const addMemberUsernameInput = document.getElementById(
+    "add-member-username-input"
+  );
+  const addMemberError = document.getElementById("add-member-error");
+
+  const username = addMemberUsernameInput?.value.trim() || "";
+
+  if (!username) {
+    if (addMemberError) {
+      addMemberError.textContent = "Username is required";
+      addMemberError.classList.remove("hidden");
+    }
+    return;
+  }
+
+  try {
+    const auth = await getAuth();
+    if (!auth || !auth.token) {
+      showAuthView();
+      return;
+    }
+
+    const tripId = await getCurrentTripId();
+    if (!tripId) {
+      alert("No trip selected");
+      return;
+    }
+
+    await addTripMember(auth.token, tripId, { username });
+
+    // Clear input
+    if (addMemberUsernameInput) addMemberUsernameInput.value = "";
+    if (addMemberError) addMemberError.classList.add("hidden");
+
+    // Reload trip detail to refresh members
+    await showTripDetailView(tripId);
+  } catch (error) {
+    console.error("Error adding member:", error);
+    if (addMemberError) {
+      addMemberError.textContent = error.message || "Failed to add member";
+      addMemberError.classList.remove("hidden");
+    }
+  }
+}
+
+// Settlement functionality removed
+
+/**
+ * Handle trip category click (for adding expenses)
+ */
+async function handleTripCategoryClick(categoryType) {
+  const tripId = await getCurrentTripId();
+  if (!tripId) {
+    alert("Please select or create a trip first");
+    return;
+  }
+
+  // Show category actions within trip detail view
+  showCategoryActionsViewInTripDetail(categoryType);
+}
+
+/**
+ * Show category actions view within trip detail view
+ */
+function showCategoryActionsViewInTripDetail(categoryType) {
+  currentCategoryType = categoryType;
+
+  const categoryNames = {
+    flight: "Flight",
+    hotel: "Hotel",
+    restaurant: "Restaurant",
+    attraction: "Attraction",
+  };
+
+  // Button labels per category
+  const buttonLabels = {
+    flight: {
+      screenshot: "Screenshot booking",
+      upload: "Upload file (PDF / image)",
+      manual: "Enter manually",
+    },
+    hotel: {
+      screenshot: "Screenshot booking",
+      upload: "Upload file (PDF / image)",
+      manual: "Enter manually",
+    },
+    restaurant: {
+      screenshot: "Screenshot receipt",
+      upload: "Upload receipt (PDF / image)",
+      manual: "Enter manually",
+    },
+    attraction: {
+      screenshot: "Screenshot ticket",
+      upload: "Upload ticket (PDF / image)",
+      manual: "Enter manually",
+    },
+  };
+
+  const categoryActionsTitleTrip = document.getElementById(
+    "category-actions-title-trip"
+  );
+  if (categoryActionsTitleTrip) {
+    categoryActionsTitleTrip.textContent = `Add ${categoryNames[categoryType]} booking`;
+  }
+
+  // Update button labels
+  const labels = buttonLabels[categoryType] || buttonLabels.flight;
+  const btnCategoryScreenshotTrip = document.getElementById(
+    "btn-category-screenshot-trip"
+  );
+  const btnCategoryUploadTrip = document.getElementById(
+    "btn-category-upload-trip"
+  );
+  const btnCategoryManualTrip = document.getElementById(
+    "btn-category-manual-trip"
+  );
+
+  if (btnCategoryScreenshotTrip) {
+    const textSpan = btnCategoryScreenshotTrip.querySelector(".btn-text");
+    if (textSpan) textSpan.textContent = labels.screenshot;
+  }
+  if (btnCategoryUploadTrip) {
+    const textSpan = btnCategoryUploadTrip.querySelector(".btn-text");
+    if (textSpan) textSpan.textContent = labels.upload;
+  }
+  if (btnCategoryManualTrip) {
+    const textSpan = btnCategoryManualTrip.querySelector(".btn-text");
+    if (textSpan) textSpan.textContent = labels.manual;
+  }
+
+  // Hide home view, show category actions
+  const homeViewTrip = document.getElementById("home-view-trip");
+  const categoryActionsViewTrip = document.getElementById(
+    "category-actions-view-trip"
+  );
+
+  if (homeViewTrip) homeViewTrip.classList.add("hidden");
+  if (categoryActionsViewTrip)
+    categoryActionsViewTrip.classList.remove("hidden");
+}
+
+/**
+ * Show profile edit modal
+ */
+function showProfileEditModal() {
+  const profileModal = document.getElementById("profile-modal");
+  if (!profileModal) return;
+
+  profileModal.classList.remove("hidden");
+
+  // Load current user data
+  getAuth().then((auth) => {
+    if (!auth) return;
+
+    const profileEditUsername = document.getElementById(
+      "profile-edit-username"
+    );
+    const profileEditEmail = document.getElementById("profile-edit-email");
+
+    if (profileEditUsername) profileEditUsername.value = auth.username || "";
+    if (profileEditEmail) profileEditEmail.value = auth.email || "";
+
+    // Show edit view, hide display view
+    const profileDisplayView = document.getElementById("profile-display-view");
+    const profileEditView = document.getElementById("profile-edit-view");
+
+    if (profileDisplayView) profileDisplayView.classList.add("hidden");
+    if (profileEditView) profileEditView.classList.remove("hidden");
+  });
+}
+
+/**
+ * Handle profile update
+ */
+async function handleProfileUpdate() {
+  const profileEditUsername = document.getElementById("profile-edit-username");
+  const profileEditEmail = document.getElementById("profile-edit-email");
+  const profileEditError = document.getElementById("profile-edit-error");
+
+  const username = profileEditUsername?.value.trim() || "";
+  const email = profileEditEmail?.value.trim() || "";
+  // Use username as name
+  const name = username;
+
+  if (!username || !email) {
+    if (profileEditError) {
+      profileEditError.textContent = "Username and email are required";
+      profileEditError.classList.remove("hidden");
+    }
+    return;
+  }
+
+  try {
+    const auth = await getAuth();
+    if (!auth || !auth.token) {
+      showAuthView();
+      return;
+    }
+
+    // Note: Backend doesn't have update user endpoint yet
+    // For now, we'll update locally and show a message
+    // TODO: Implement backend endpoint PUT /user/me
+
+    // Update auth data locally
+    await setAuth({
+      token: auth.token,
+      userId: auth.userId,
+      username,
+      email,
+      name: name || username,
+    });
+
+    // Update profile display
+    updateProfileDisplay({ username, email, name: name || username });
+    // Profile section removed - using header profile icon instead
+    updateHeaderProfile({ username, email, name: name || username });
+
+    // Close modal
+    const profileModal = document.getElementById("profile-modal");
+    if (profileModal) profileModal.classList.add("hidden");
+
+    // Show display view
+    const profileDisplayView = document.getElementById("profile-display-view");
+    const profileEditView = document.getElementById("profile-edit-view");
+    if (profileDisplayView) profileDisplayView.classList.remove("hidden");
+    if (profileEditView) profileEditView.classList.add("hidden");
+
+    alert(
+      "Profile updated! (Note: Backend update endpoint not yet implemented)"
+    );
+  } catch (error) {
+    console.error("Error updating profile:", error);
+    if (profileEditError) {
+      profileEditError.textContent =
+        error.message || "Failed to update profile";
+      profileEditError.classList.remove("hidden");
+    }
+  }
 }
 
 /**
@@ -622,7 +1837,7 @@ function showHomeView() {
   if (regionSelectionView) regionSelectionView.classList.add("hidden");
   if (screenshotPreviewView) screenshotPreviewView.classList.add("hidden");
   if (manualFormView) manualFormView.classList.add("hidden");
-  
+
   // Show home view and hide category actions
   if (homeView) homeView.classList.remove("hidden");
   if (categoryActionsView) categoryActionsView.classList.add("hidden");
@@ -630,12 +1845,12 @@ function showHomeView() {
   if (tabHistoryContent) tabHistoryContent.classList.add("hidden");
   if (tabAdd) tabAdd.classList.add("active");
   if (tabHistory) tabHistory.classList.remove("active");
-  
+
   // Hide screenshot options if visible
   if (screenshotOptions) {
     screenshotOptions.classList.add("hidden");
   }
-  
+
   // Save view state
   saveViewState();
 }
@@ -646,38 +1861,38 @@ function showHomeView() {
  */
 function showCategoryActionsView(categoryType) {
   currentCategoryType = categoryType;
-  
+
   const categoryNames = {
     flight: "Flight",
     hotel: "Hotel",
     restaurant: "Restaurant",
-    attraction: "Attraction"
+    attraction: "Attraction",
   };
-  
+
   // Button labels per category
   const buttonLabels = {
     flight: {
       screenshot: "Screenshot booking",
       upload: "Upload file (PDF / image)",
-      manual: "Enter manually"
+      manual: "Enter manually",
     },
     hotel: {
       screenshot: "Screenshot booking",
       upload: "Upload file (PDF / image)",
-      manual: "Enter manually"
+      manual: "Enter manually",
     },
     restaurant: {
       screenshot: "Screenshot receipt",
       upload: "Upload receipt (PDF / image)",
-      manual: "Enter manually"
+      manual: "Enter manually",
     },
     attraction: {
       screenshot: "Screenshot ticket",
       upload: "Upload ticket (PDF / image)",
-      manual: "Enter manually"
-    }
+      manual: "Enter manually",
+    },
   };
-  
+
   if (categoryActionsTitle) {
     try {
       categoryActionsTitle.textContent = `Add ${categoryNames[categoryType]} booking`;
@@ -685,15 +1900,15 @@ function showCategoryActionsView(categoryType) {
       console.warn("Failed to update category actions title:", e);
     }
   }
-  
+
   // Update button labels (preserve icon, only update text span)
   const labels = buttonLabels[categoryType] || buttonLabels.flight;
   if (btnCategoryScreenshot) {
     try {
-      let textSpan = btnCategoryScreenshot.querySelector('.btn-text');
+      let textSpan = btnCategoryScreenshot.querySelector(".btn-text");
       if (!textSpan) {
-        textSpan = document.createElement('span');
-        textSpan.className = 'btn-text';
+        textSpan = document.createElement("span");
+        textSpan.className = "btn-text";
         btnCategoryScreenshot.appendChild(textSpan);
       }
       if (textSpan) {
@@ -705,10 +1920,10 @@ function showCategoryActionsView(categoryType) {
   }
   if (btnCategoryUpload) {
     try {
-      let textSpan = btnCategoryUpload.querySelector('.btn-text');
+      let textSpan = btnCategoryUpload.querySelector(".btn-text");
       if (!textSpan) {
-        textSpan = document.createElement('span');
-        textSpan.className = 'btn-text';
+        textSpan = document.createElement("span");
+        textSpan.className = "btn-text";
         btnCategoryUpload.appendChild(textSpan);
       }
       if (textSpan) {
@@ -720,10 +1935,10 @@ function showCategoryActionsView(categoryType) {
   }
   if (btnCategoryManual) {
     try {
-      let textSpan = btnCategoryManual.querySelector('.btn-text');
+      let textSpan = btnCategoryManual.querySelector(".btn-text");
       if (!textSpan) {
-        textSpan = document.createElement('span');
-        textSpan.className = 'btn-text';
+        textSpan = document.createElement("span");
+        textSpan.className = "btn-text";
         btnCategoryManual.appendChild(textSpan);
       }
       if (textSpan) {
@@ -733,24 +1948,24 @@ function showCategoryActionsView(categoryType) {
       console.warn("Failed to update manual button label:", e);
     }
   }
-  
+
   // Ensure dashboard view is visible
   if (authView) authView.classList.add("hidden");
   if (dashboardView) dashboardView.classList.remove("hidden");
   if (regionSelectionView) regionSelectionView.classList.add("hidden");
   if (screenshotPreviewView) screenshotPreviewView.classList.add("hidden");
   if (manualFormView) manualFormView.classList.add("hidden");
-  
+
   // Show category actions and hide home
   if (homeView) homeView.classList.add("hidden");
   if (categoryActionsView) categoryActionsView.classList.remove("hidden");
-  
+
   // Ensure we're on the Add tab
   if (tabAddContent) tabAddContent.classList.remove("hidden");
   if (tabHistoryContent) tabHistoryContent.classList.add("hidden");
   if (tabAdd) tabAdd.classList.add("active");
   if (tabHistory) tabHistory.classList.remove("active");
-  
+
   // Save view state
   saveViewState();
 }
@@ -764,7 +1979,7 @@ async function showHistoryView() {
   if (tabAdd) tabAdd.classList.remove("active");
   if (tabHistory) tabHistory.classList.add("active");
   await loadHistoryBookings();
-  
+
   // Save view state
   saveViewState();
 }
@@ -785,6 +2000,32 @@ function showScreenshotPreview(dataUrl) {
     return;
   }
 
+  // Hide category buttons when showing screenshot preview (for better layout)
+  const homeViewTrip = document.getElementById("home-view-trip");
+  const categoryActionsViewTrip = document.getElementById(
+    "category-actions-view-trip"
+  );
+  const tabAddTripContent = document.getElementById("tab-add-trip-content");
+  const isInTripDetail =
+    tripDetailView && !tripDetailView.classList.contains("hidden");
+
+  // Hide category buttons
+  if (homeViewTrip) homeViewTrip.classList.add("hidden");
+  if (categoryActionsViewTrip) categoryActionsViewTrip.classList.add("hidden");
+
+  // If we're in trip detail view, move screenshot preview into tab content at the top
+  if (isInTripDetail && tabAddTripContent && screenshotPreviewView) {
+    // Remove from current parent if it exists
+    if (screenshotPreviewView.parentNode) {
+      screenshotPreviewView.parentNode.removeChild(screenshotPreviewView);
+    }
+    // Insert at the beginning of tab content (where the buttons were)
+    tabAddTripContent.insertBefore(
+      screenshotPreviewView,
+      tabAddTripContent.firstChild
+    );
+  }
+
   if (authView) authView.classList.add("hidden");
   if (dashboardView) dashboardView.classList.add("hidden");
   if (regionSelectionView) regionSelectionView.classList.add("hidden");
@@ -803,7 +2044,7 @@ function showScreenshotPreview(dataUrl) {
   };
 
   screenshotPreviewImage.src = dataUrl;
-  
+
   // Save view state
   saveViewState();
 }
@@ -816,49 +2057,77 @@ function showScreenshotPreview(dataUrl) {
  */
 function showManualFormView(categoryType, { fromScreenshot = false }) {
   currentCategoryType = categoryType;
-  
+
   const categoryNames = {
     flight: "Flight",
     hotel: "Hotel",
     restaurant: "Restaurant",
-    attraction: "Attraction"
+    attraction: "Attraction",
   };
-  
+
   const titleElement = document.getElementById("manual-form-title");
   if (titleElement) {
     if (editingBookingId) {
-      titleElement.textContent = `Edit ${categoryNames[categoryType]} booking`;
+      titleElement.textContent = `Edit ${categoryNames[categoryType]} expense`;
     } else {
-      titleElement.textContent = `Add ${categoryNames[categoryType]} booking`;
+      titleElement.textContent = `Add ${categoryNames[categoryType]} expense`;
     }
   }
-  
+
   // Hide all forms
   document.getElementById("manual-form-flight")?.classList.add("hidden");
   document.getElementById("manual-form-hotel")?.classList.add("hidden");
   document.getElementById("manual-form-restaurant")?.classList.add("hidden");
   document.getElementById("manual-form-attraction")?.classList.add("hidden");
-  
+
   // Show the correct form
   const formElement = document.getElementById(`manual-form-${categoryType}`);
   if (formElement) {
     formElement.classList.remove("hidden");
   }
-  
+
   // Show/hide AI actions (for flight, hotel, restaurant, and attraction)
   const aiActionsContainer = document.getElementById("ai-actions-container");
   if (aiActionsContainer) {
-    if (categoryType === "flight" || categoryType === "hotel" || categoryType === "restaurant" || categoryType === "attraction") {
+    if (
+      categoryType === "flight" ||
+      categoryType === "hotel" ||
+      categoryType === "restaurant" ||
+      categoryType === "attraction"
+    ) {
       aiActionsContainer.classList.remove("hidden");
     } else {
       aiActionsContainer.classList.add("hidden");
     }
   }
-  if (authView) authView.classList.add("hidden");
-  if (dashboardView) dashboardView.classList.add("hidden");
+
+  // Check if we're in trip detail view
+  const isInTripDetail =
+    tripDetailView && !tripDetailView.classList.contains("hidden");
+
+  if (isInTripDetail) {
+    // Keep trip detail view visible, just show manual form on top
+    // Hide category actions in trip detail
+    const categoryActionsViewTrip = document.getElementById(
+      "category-actions-view-trip"
+    );
+    if (categoryActionsViewTrip)
+      categoryActionsViewTrip.classList.add("hidden");
+  } else {
+    // Normal flow - hide other views
+    if (authView) authView.classList.add("hidden");
+    if (dashboardView) dashboardView.classList.add("hidden");
+    if (tripsView) tripsView.classList.add("hidden");
+    if (tripDetailView) tripDetailView.classList.add("hidden");
+  }
+
   if (regionSelectionView) regionSelectionView.classList.add("hidden");
   if (screenshotPreviewView) screenshotPreviewView.classList.add("hidden");
-  if (manualFormView) manualFormView.classList.remove("hidden");
+  if (manualFormView) {
+    manualFormView.classList.remove("hidden");
+    // Scroll to top when showing manual form
+    manualFormView.scrollTop = 0;
+  }
 
   // Show file preview if available
   updateFilePreview();
@@ -868,8 +2137,7 @@ function showManualFormView(categoryType, { fromScreenshot = false }) {
     if (fromScreenshot && lastScreenshotDataUrl) {
       const isPdf = lastScreenshotDataUrl.startsWith("data:application/pdf");
       const fileType = isPdf ? "PDF" : "image";
-      screenshotStatus.textContent =
-        `${fileType === "PDF" ? "PDF" : "Screenshot"} captured. You can try '${isPdf ? "Analyze PDF" : "Analyze image"}' to prefill this form, or fill in everything manually.`;
+      screenshotStatus.textContent = `${fileType === "PDF" ? "PDF" : "Screenshot"} captured. You can try '${isPdf ? "Analyze PDF" : "Analyze image"}' to prefill this form, or fill in everything manually.`;
       screenshotStatus.style.display = "block";
     } else {
       screenshotStatus.textContent =
@@ -880,18 +2148,23 @@ function showManualFormView(categoryType, { fromScreenshot = false }) {
 
   // Update AI button text based on file type
   if (aiFillBtn) {
-    const isPdf = lastScreenshotDataUrl && lastScreenshotDataUrl.startsWith("data:application/pdf");
-    const buttonText = lastScreenshotDataUrl 
-      ? (isPdf ? "Analyze PDF" : "Analyze image")
+    const isPdf =
+      lastScreenshotDataUrl &&
+      lastScreenshotDataUrl.startsWith("data:application/pdf");
+    const buttonText = lastScreenshotDataUrl
+      ? isPdf
+        ? "Analyze PDF"
+        : "Analyze image"
       : "Extract from screenshot";
-    
+
     // Find or create the text span
-    let buttonTextElement = aiFillBtn.querySelector('.btn-text');
+    let buttonTextElement = aiFillBtn.querySelector(".btn-text");
     if (!buttonTextElement) {
       // Create text span if it doesn't exist
-      buttonTextElement = document.createElement('span');
-      buttonTextElement.className = 'btn-text';
-      const icon = aiFillBtn.querySelector('.btn-icon') || aiFillBtn.querySelector('svg');
+      buttonTextElement = document.createElement("span");
+      buttonTextElement.className = "btn-text";
+      const icon =
+        aiFillBtn.querySelector(".btn-icon") || aiFillBtn.querySelector("svg");
       if (icon && icon.parentNode) {
         icon.parentNode.insertBefore(buttonTextElement, icon.nextSibling);
       } else {
@@ -909,57 +2182,77 @@ function showManualFormView(categoryType, { fromScreenshot = false }) {
     aiStatus.textContent = "";
     aiStatus.className = "ai-status";
   }
-  
+
   // Render dishes list if we have dishes (for restaurant)
   if (categoryType === "restaurant") {
     renderDishesList();
   }
-  
+
   // Save view state (we're in manual form, possibly with screenshot)
   saveViewState();
 }
 
 /**
  * Handle login form submission
- * Bypassed for now - accepts any input (even empty)
  */
 async function handleLogin() {
-  console.log("handleLogin called");
-  
-  // Get email from input or use default
-  const email = (loginEmailInput && loginEmailInput.value.trim()) || "user@example.com";
-  const finalEmail = email || "user@example.com";
+  const identifier = loginEmailInput?.value.trim() || "";
+  const password = loginPasswordInput?.value || "";
+
+  if (!identifier || !password) {
+    showAuthError("Please enter your email/username and password");
+    return;
+  }
 
   try {
-    console.log("Logging in with email:", finalEmail);
-    
     if (loginBtn) {
       loginBtn.disabled = true;
       const originalText = loginBtn.innerHTML;
-      loginBtn.innerHTML = '<span class="loading-spinner"></span> Logging in...';
+      loginBtn.innerHTML =
+        '<span class="loading-spinner"></span> Logging in...';
     }
 
-    // Directly set auth without API call - bypass all validation
-    await setAuth("FAKE_TOKEN", finalEmail);
-    console.log("Auth set successfully");
+    // Call real API
+    const result = await loginUser({ identifier, password });
 
-    // Update profile display (wrapped in try-catch to prevent errors from blocking login)
+    // Save auth data
+    await setAuth({
+      token: result.token,
+      userId: result.userId || result.user?.id,
+      username: result.username || result.user?.username,
+      email: result.email || result.user?.email,
+      name: result.name || result.user?.name,
+    });
+
+    // Fetch user details to get complete info
     try {
-      updateProfileDisplay(finalEmail);
+      const user = await getMe(result.token);
+      await setAuth({
+        token: result.token,
+        userId: user.id,
+        username: user.username,
+        email: user.email,
+        name: user.name,
+      });
+      updateProfileDisplay(user);
     } catch (profileError) {
-      console.warn("Profile display update failed (non-critical):", profileError);
+      console.warn("Failed to fetch user details:", profileError);
+      // Use data from login response
+      updateProfileDisplay(result);
     }
-
-    // Update UI
-    await showDashboardView();
-    console.log("Dashboard shown");
 
     // Clear form
     if (loginEmailInput) loginEmailInput.value = "";
     if (loginPasswordInput) loginPasswordInput.value = "";
+    hideAuthError();
+
+    // Show trips screen after login
+    await showTripsView();
   } catch (error) {
     console.error("Login error:", error);
-    alert("Login failed: " + error.message);
+    showAuthError(
+      error.message || "Login failed. Please check your credentials."
+    );
   } finally {
     if (loginBtn) {
       loginBtn.disabled = false;
@@ -971,43 +2264,87 @@ async function handleLogin() {
 
 /**
  * Handle signup form submission
- * Bypassed for now - accepts any input
  */
 async function handleSignup() {
-  const email = signupEmailInput.value.trim() || "user@example.com";
-  const password = signupPasswordInput.value || "password";
-  const confirmPassword = signupConfirmInput.value || "password";
+  const signupUsernameInput = document.getElementById("signup-username");
 
-  // Bypass validation - just use the email provided or default
-  const finalEmail = email || "user@example.com";
+  const username = signupUsernameInput?.value.trim() || "";
+  const email = signupEmailInput?.value.trim() || "";
+  const password = signupPasswordInput?.value || "";
+  const confirmPassword = signupConfirmInput?.value || "";
+
+  if (!username || !email || !password) {
+    showAuthError("Please enter username, email and password");
+    return;
+  }
+
+  if (password !== confirmPassword) {
+    showAuthError("Passwords do not match");
+    return;
+  }
+
+  if (password.length < 4) {
+    showAuthError("Password must be at least 4 characters");
+    return;
+  }
+
+  // Use username as name
+  const name = username;
+  const finalName = name || username;
 
   try {
     if (signupBtn) {
       signupBtn.disabled = true;
       const originalText = signupBtn.innerHTML;
-      signupBtn.innerHTML = '<span class="loading-spinner"></span> Signing up...';
+      signupBtn.innerHTML =
+        '<span class="loading-spinner"></span> Signing up...';
     }
 
-    // Directly set auth without API call
-    await setAuth("FAKE_TOKEN", finalEmail);
+    // Call real API
+    const result = await registerUser({
+      username,
+      name: finalName,
+      email,
+      password,
+    });
 
-    // Update profile display (wrapped in try-catch to prevent errors from blocking signup)
+    // Save auth data
+    await setAuth({
+      token: result.token,
+      userId: result.userId || result.user?.id,
+      username: result.username || result.user?.username,
+      email: result.email || result.user?.email,
+      name: result.name || result.user?.name,
+    });
+
+    // Fetch user details to get complete info
     try {
-      updateProfileDisplay(finalEmail);
+      const user = await getMe(result.token);
+      await setAuth({
+        token: result.token,
+        userId: user.id,
+        username: user.username,
+        email: user.email,
+        name: user.name,
+      });
+      updateProfileDisplay(user);
     } catch (profileError) {
-      console.warn("Profile display update failed (non-critical):", profileError);
+      console.warn("Failed to fetch user details:", profileError);
+      updateProfileDisplay(result);
     }
-
-    // Update UI
-    await showDashboardView();
 
     // Clear form
+    if (signupUsernameInput) signupUsernameInput.value = "";
     if (signupEmailInput) signupEmailInput.value = "";
     if (signupPasswordInput) signupPasswordInput.value = "";
     if (signupConfirmInput) signupConfirmInput.value = "";
+    hideAuthError();
+
+    // Show trips screen after signup
+    await showTripsView();
   } catch (error) {
     console.error("Signup error:", error);
-    alert("Signup failed. Please try again.");
+    showAuthError(error.message || "Signup failed. Please try again.");
   } finally {
     if (signupBtn) {
       signupBtn.disabled = false;
@@ -1019,17 +2356,34 @@ async function handleSignup() {
 
 /**
  * Update profile display with user info
+ * @param {string|object} userData - Either email string or user object with {email, name, username}
  */
-function updateProfileDisplay(email) {
-  if (!email) {
-    console.warn("updateProfileDisplay called without email");
+function updateProfileDisplay(userData) {
+  if (!userData) {
+    console.warn("updateProfileDisplay called without userData");
     return;
   }
 
   try {
-    // Extract name from email (or use email as fallback)
-    const name = email.split("@")[0];
-    const initials = name.substring(0, 2).toUpperCase();
+    // Handle both string (email) and object (user data) formats
+    let email, name, username;
+    if (typeof userData === "string") {
+      email = userData;
+      name = email.split("@")[0];
+      username = name;
+    } else {
+      email = userData.email || "";
+      name = userData.name || userData.username || email.split("@")[0] || "";
+      username = userData.username || name;
+    }
+
+    if (!email) {
+      console.warn("updateProfileDisplay: no email provided");
+      return;
+    }
+
+    // Get initials from name or username
+    const initials = (name || username || email).substring(0, 2).toUpperCase();
 
     // Update profile section (safely check if elements exist)
     const profileNameEl = document.getElementById("profile-name");
@@ -1037,17 +2391,17 @@ function updateProfileDisplay(email) {
     const profilePictureEl = document.getElementById("profile-picture");
 
     if (profileNameEl) {
-      profileNameEl.textContent = name.charAt(0).toUpperCase() + name.slice(1);
+      profileNameEl.textContent = name || username || email.split("@")[0];
     } else {
       console.warn("profile-name element not found");
     }
-    
+
     if (profileEmailEl) {
       profileEmailEl.textContent = email;
     } else {
       console.warn("profile-email-display element not found");
     }
-    
+
     if (profilePictureEl) {
       profilePictureEl.textContent = initials;
     } else {
@@ -1060,7 +2414,7 @@ function updateProfileDisplay(email) {
     const modalPictureEl = document.getElementById("profile-modal-picture");
 
     if (modalNameEl) {
-      modalNameEl.textContent = name.charAt(0).toUpperCase() + name.slice(1);
+      modalNameEl.textContent = name || username || email.split("@")[0];
     }
     if (modalEmailEl) {
       modalEmailEl.textContent = email;
@@ -1439,13 +2793,26 @@ function fileToDataUrl(file) {
     reader.onload = (e) => {
       const dataUrl = e.target.result;
       // Validate that we got a valid data URL
-      if (dataUrl && (dataUrl.startsWith('data:image/') || dataUrl.startsWith('data:application/pdf'))) {
+      if (
+        dataUrl &&
+        (dataUrl.startsWith("data:image/") ||
+          dataUrl.startsWith("data:application/pdf"))
+      ) {
         resolve(dataUrl);
       } else {
-        reject(new Error("Invalid file format. Please upload an image (PNG, JPG, etc.) or PDF file."));
+        reject(
+          new Error(
+            "Invalid file format. Please upload an image (PNG, JPG, etc.) or PDF file."
+          )
+        );
       }
     };
-    reader.onerror = (e) => reject(new Error("Failed to read file: " + (e.target.error?.message || "Unknown error")));
+    reader.onerror = (e) =>
+      reject(
+        new Error(
+          "Failed to read file: " + (e.target.error?.message || "Unknown error")
+        )
+      );
     reader.readAsDataURL(file);
   });
 }
@@ -1556,13 +2923,29 @@ function handleManual() {
  * Setup manual form handlers
  */
 function setupManualFormHandlers() {
-  saveBookingBtn.addEventListener("click", async () => {
-    await handleSaveBooking();
-  });
+  if (saveBookingBtn) {
+    saveBookingBtn.addEventListener(
+      "click",
+      async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        await handleSaveBooking();
+      },
+      { passive: false }
+    );
+  }
 
-  cancelBookingBtn.addEventListener("click", () => {
-    handleCancelBooking();
-  });
+  if (cancelBookingBtn) {
+    cancelBookingBtn.addEventListener(
+      "click",
+      (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        handleCancelBooking();
+      },
+      { passive: false }
+    );
+  }
 
   // Dish management for restaurant
   const btnAddDish = document.getElementById("btn-add-dish");
@@ -1594,14 +2977,18 @@ function setupManualFormHandlers() {
   }
 
   // Auto-save form data on input changes
-  const formElement = document.getElementById(`manual-form-${currentCategoryType}`);
+  const formElement = document.getElementById(
+    `manual-form-${currentCategoryType}`
+  );
   if (formElement) {
-    const inputs = formElement.querySelectorAll('input:not([type="file"]), select, textarea');
-    inputs.forEach(input => {
-      input.addEventListener('input', () => {
+    const inputs = formElement.querySelectorAll(
+      'input:not([type="file"]), select, textarea'
+    );
+    inputs.forEach((input) => {
+      input.addEventListener("input", () => {
         saveFormData();
       });
-      input.addEventListener('change', () => {
+      input.addEventListener("change", () => {
         saveFormData();
       });
     });
@@ -1657,7 +3044,15 @@ async function saveBookingFromForm(categoryType) {
     const reference = getFieldValue("field-reference");
     const notes = getFieldValue("field-notes");
 
-    if (!airline || !flightNumber || !origin || !destination || !departureDateTime || !price || price <= 0) {
+    if (
+      !airline ||
+      !flightNumber ||
+      !origin ||
+      !destination ||
+      !departureDateTime ||
+      !price ||
+      price <= 0
+    ) {
       formError.textContent = "Please fill in all required fields (*)";
       formError.classList.remove("hidden");
       return null;
@@ -1693,7 +3088,18 @@ async function saveBookingFromForm(categoryType) {
     const reservationId = getFieldValue("field-reservation-id");
     const notes = getFieldValue("field-notes-hotel");
 
-    if (!hotelName || !hotelAddress || !city || !country || !checkInDate || !checkOutDate || !nights || !guests || !price || price <= 0) {
+    if (
+      !hotelName ||
+      !hotelAddress ||
+      !city ||
+      !country ||
+      !checkInDate ||
+      !checkOutDate ||
+      !nights ||
+      !guests ||
+      !price ||
+      price <= 0
+    ) {
       formError.textContent = "Please fill in all required fields (*)";
       formError.classList.remove("hidden");
       return null;
@@ -1725,10 +3131,17 @@ async function saveBookingFromForm(categoryType) {
     const partySize = getFieldNumber("field-party-size");
     const price = getFieldNumber("field-price-restaurant");
     const currency = getSelectValue("field-currency-restaurant");
-    const receiptFile = document.getElementById("field-restaurant-receipt")?.files[0];
+    const receiptFile = document.getElementById("field-restaurant-receipt")
+      ?.files[0];
     const notes = getFieldValue("field-notes-restaurant");
 
-    if (!restaurantName || !visitDateTime || !partySize || !price || price <= 0) {
+    if (
+      !restaurantName ||
+      !visitDateTime ||
+      !partySize ||
+      !price ||
+      price <= 0
+    ) {
       formError.textContent = "Please fill in all required fields (*)";
       formError.classList.remove("hidden");
       return null;
@@ -1748,7 +3161,7 @@ async function saveBookingFromForm(categoryType) {
       notes,
       title: restaurantName,
     };
-    
+
     // Clear extracted dishes after saving
     extractedDishes = [];
   } else if (categoryType === "attraction") {
@@ -1757,13 +3170,23 @@ async function saveBookingFromForm(categoryType) {
     const googleMapsUrl = getFieldValue("field-google-maps-url-attraction");
     const visitDateTime = getFieldValue("field-visit-datetime-attraction");
     const ticketCount = getFieldNumber("field-ticket-count");
-    const ticketPricePerPerson = getFieldNumber("field-ticket-price-per-person");
+    const ticketPricePerPerson = getFieldNumber(
+      "field-ticket-price-per-person"
+    );
     const price = getFieldNumber("field-price-attraction");
     const currency = getSelectValue("field-currency-attraction");
     const platform = getFieldValue("field-platform-attraction");
     const notes = getFieldValue("field-notes-attraction");
 
-    if (!attractionName || !locationText || !visitDateTime || !ticketCount || !ticketPricePerPerson || !price || price <= 0) {
+    if (
+      !attractionName ||
+      !locationText ||
+      !visitDateTime ||
+      !ticketCount ||
+      !ticketPricePerPerson ||
+      !price ||
+      price <= 0
+    ) {
       formError.textContent = "Please fill in all required fields (*)";
       formError.classList.remove("hidden");
       return null;
@@ -1793,8 +3216,21 @@ async function saveBookingFromForm(categoryType) {
  */
 async function handleSaveBooking() {
   if (!currentCategoryType) {
-    formError.textContent = "No category selected";
-    formError.classList.remove("hidden");
+    if (formError) {
+      formError.textContent = "No category selected";
+      formError.classList.remove("hidden");
+    }
+    return;
+  }
+
+  // Check if there's a current trip selected
+  const tripId = await getCurrentTripId();
+  if (!tripId) {
+    if (formError) {
+      formError.textContent = "Please select or create a trip first";
+      formError.classList.remove("hidden");
+    }
+    alert("Please select or create a trip first");
     return;
   }
 
@@ -1804,24 +3240,119 @@ async function handleSaveBooking() {
   }
 
   try {
-    // Save to server (placeholder for now)
-    await saveBookingToServer(booking);
-    
-    // Save to local storage (update if editing, add if new)
+    const auth = await getAuth();
+    if (!auth || !auth.token) {
+      showAuthView();
+      return;
+    }
+
+    // Extract amount and description from booking
+    // The booking object stores price as "totalPrice" (not "price")
+    const amount = parseFloat(
+      booking.totalPrice ||
+        booking.price ||
+        booking["field-price"] ||
+        booking["field-price-hotel"] ||
+        booking["field-price-restaurant"] ||
+        booking["field-price-attraction"] ||
+        0
+    );
+
+    // Build description from booking data
+    let description = booking.description;
+    if (!description || description.trim() === "") {
+      if (booking["field-airline"] && booking["field-flight-number"]) {
+        description = `${booking["field-airline"]} ${booking["field-flight-number"]}`;
+      } else if (booking["field-hotel-name"]) {
+        description = booking["field-hotel-name"];
+      } else if (booking["field-restaurant-name"]) {
+        description = booking["field-restaurant-name"];
+      } else if (booking["field-attraction-name"]) {
+        description = booking["field-attraction-name"];
+      } else {
+        description = `${currentCategoryType} expense`;
+      }
+    }
+
+    // Ensure description is not empty
+    if (!description || description.trim() === "") {
+      description = `${currentCategoryType} expense`;
+    }
+
+    // Create expense for the current trip
     if (editingBookingId) {
-      await updateBooking(booking);
-      alert("Booking updated!");
+      // Update existing expense
+      // API: PUT /expense/detail/:expenseId
+      // API Example: { "description": "Updated Lunch", "amount": 300 }
+      await updateExpense(auth.token, editingBookingId, {
+        description: description.trim(),
+        amount: parseFloat(amount),
+      });
+      alert("Expense updated!");
     } else {
-      await addBooking(booking);
-      alert("Booking saved!");
+      // Create new expense
+      // API: POST /expense/:tripId
+      // Location: src/popup.js:3265 (handleSaveBooking function)
+      // API Example: { "description": "Lunch", "amount": 200 }
+      // For "equal" type, we can omit type field - backend defaults to "equal"
+
+      // Ensure all fields are properly formatted
+      const expenseDescription = description.trim();
+      const expenseAmount = parseFloat(amount);
+
+      // Validate before sending
+      if (!expenseDescription || expenseDescription === "") {
+        throw new Error("Expense description is required");
+      }
+
+      if (isNaN(expenseAmount) || expenseAmount <= 0) {
+        throw new Error("Expense amount must be greater than 0");
+      }
+
+      // Build payload matching the API exactly
+      // API Example: { "description": "Lunch", "amount": 200 }
+      // For "equal" type, we omit the type field - backend defaults to "equal"
+      const expensePayload = {
+        description: expenseDescription,
+        amount: expenseAmount,
+        // No type field - backend will default to "equal"
+      };
+
+      console.log("=== CREATING EXPENSE ===");
+      console.log("Location: src/popup.js:3265 (handleSaveBooking function)");
+      console.log("API Endpoint: POST /expense/" + tripId);
+      console.log("Payload:", JSON.stringify(expensePayload, null, 2));
+
+      // Show loading overlay
+      showLoadingOverlay("Saving expense...");
+
+      const response = await createExpense(auth.token, tripId, expensePayload);
+      console.log("✅ Expense created successfully:", response);
+
+      // Hide loading and show success animation
+      hideLoadingOverlay();
+      showSuccessAnimation("Booking saved!");
     }
 
     // Clear editing mode
     editingBookingId = null;
 
-    // Reload history if on history tab
+    // Reload expenses if on history tab (old dashboard)
     if (tabHistory && tabHistory.classList.contains("active")) {
       await loadHistoryBookings();
+    }
+
+    // If we're in trip detail view, reload expenses
+    if (tripDetailView && !tripDetailView.classList.contains("hidden")) {
+      const tabHistoryTrip = document.getElementById("tab-history-trip");
+      if (tabHistoryTrip && tabHistoryTrip.classList.contains("active")) {
+        await loadTripExpensesHistory(tripId);
+      }
+      // Also close manual form and go back to trip detail
+      if (manualFormView) manualFormView.classList.add("hidden");
+      // Show home view in trip detail
+      const homeViewTrip = document.getElementById("home-view-trip");
+      if (homeViewTrip) homeViewTrip.classList.remove("hidden");
     }
 
     // Clear form and screenshot
@@ -1856,6 +3387,44 @@ async function handleSaveBooking() {
  * Handle cancel booking
  */
 async function handleCancelBooking() {
+  // Hide manual form
+  if (manualFormView) manualFormView.classList.add("hidden");
+
+  // Check if we're in trip detail view
+  const isInTripDetail =
+    tripDetailView && !tripDetailView.classList.contains("hidden");
+
+  if (isInTripDetail) {
+    // Show home view with category buttons in trip detail
+    const homeViewTrip = document.getElementById("home-view-trip");
+    const categoryActionsViewTrip = document.getElementById(
+      "category-actions-view-trip"
+    );
+
+    if (homeViewTrip) homeViewTrip.classList.remove("hidden");
+    if (categoryActionsViewTrip)
+      categoryActionsViewTrip.classList.add("hidden");
+  } else {
+    // Show category actions view (which shows the 4 buttons)
+    if (currentCategoryType) {
+      showCategoryActionsView(currentCategoryType);
+    } else {
+      // Show home view if no category selected
+      showHomeView();
+    }
+  }
+
+  // Clear form and screenshot
+  clearManualForm();
+  editingBookingId = null;
+
+  // Clear form data
+  if (currentCategoryType) {
+    chrome.storage.local.remove([`formData_${currentCategoryType}`]);
+  }
+}
+
+async function handleCancelBookingOld() {
   clearManualForm();
   manualFormView.classList.add("hidden");
   // Clear view state since we're navigating away from manual form
@@ -1891,11 +3460,16 @@ async function handleAiFillFromScreenshot() {
     }
   }
 
-  // Show loading state
-  const originalText = aiFillBtn.innerHTML;
+  // Store original button content if not already stored
+  if (!aiFillBtn.getAttribute("data-original-html")) {
+    aiFillBtn.setAttribute("data-original-html", aiFillBtn.innerHTML);
+  }
+
+  // Disable button during extraction
   aiFillBtn.disabled = true;
-  aiFillBtn.classList.add("loading");
-  aiFillBtn.innerHTML = '<span class="loading-spinner"></span> Extracting...';
+  aiFillBtn.classList.add("loading", "btn-loading");
+  aiFillBtn.innerHTML =
+    '<span class="loading-spinner-small"></span> Extracting...';
 
   if (aiStatus) {
     aiStatus.textContent = "Analyzing screenshot with AI...";
@@ -1911,17 +3485,20 @@ async function handleAiFillFromScreenshot() {
     );
 
     // Call AI analysis with current category type
-    const data = await analyzeBookingScreenshot(lastScreenshotDataUrl, currentCategoryType || 'flight');
+    const data = await analyzeBookingScreenshot(
+      lastScreenshotDataUrl,
+      currentCategoryType || "flight"
+    );
 
     console.log("AI extraction result:", data);
 
     // Prefill form fields from AI response based on category type
     let fieldsFilled = 0;
 
-    if (currentCategoryType === 'hotel') {
+    if (currentCategoryType === "hotel") {
       console.log("Processing hotel extraction, data keys:", Object.keys(data));
       console.log("Hotel data received:", data);
-      
+
       // Hotel-specific fields
       const hotelNameInput = document.getElementById("field-hotel-name");
       const hotelAddressInput = document.getElementById("field-hotel-address");
@@ -1933,9 +3510,15 @@ async function handleAiFillFromScreenshot() {
       const roomTypeInput = document.getElementById("field-room-type");
       const guestsInput = document.getElementById("field-guests");
       const priceHotelInput = document.getElementById("field-price-hotel");
-      const currencyHotelInput = document.getElementById("field-currency-hotel");
-      const platformHotelInput = document.getElementById("field-platform-hotel");
-      const reservationIdInput = document.getElementById("field-reservation-id");
+      const currencyHotelInput = document.getElementById(
+        "field-currency-hotel"
+      );
+      const platformHotelInput = document.getElementById(
+        "field-platform-hotel"
+      );
+      const reservationIdInput = document.getElementById(
+        "field-reservation-id"
+      );
       const notesHotelInput = document.getElementById("field-notes-hotel");
 
       if (data.hotel_name && hotelNameInput) {
@@ -2040,25 +3623,41 @@ async function handleAiFillFromScreenshot() {
       if (data.notes && notesHotelInput) {
         const existingNotes = notesHotelInput.value.trim();
         if (existingNotes) {
-          notesHotelInput.value = existingNotes + "\n\n[AI Extracted]: " + data.notes;
+          notesHotelInput.value =
+            existingNotes + "\n\n[AI Extracted]: " + data.notes;
         } else {
           notesHotelInput.value = "[AI Extracted]: " + data.notes;
         }
         fieldsFilled++;
         console.log("Filled notes");
       }
-      
-      console.log("Hotel extraction complete. Total fields filled:", fieldsFilled);
-    } else if (currentCategoryType === 'restaurant') {
+
+      console.log(
+        "Hotel extraction complete. Total fields filled:",
+        fieldsFilled
+      );
+    } else if (currentCategoryType === "restaurant") {
       // Restaurant-specific fields
-      const restaurantNameInput = document.getElementById("field-restaurant-name");
+      const restaurantNameInput = document.getElementById(
+        "field-restaurant-name"
+      );
       const locationTextInput = document.getElementById("field-location-text");
-      const googleMapsUrlInput = document.getElementById("field-google-maps-url");
-      const visitDateTimeInput = document.getElementById("field-visit-datetime");
+      const googleMapsUrlInput = document.getElementById(
+        "field-google-maps-url"
+      );
+      const visitDateTimeInput = document.getElementById(
+        "field-visit-datetime"
+      );
       const partySizeInput = document.getElementById("field-party-size");
-      const priceRestaurantInput = document.getElementById("field-price-restaurant");
-      const currencyRestaurantInput = document.getElementById("field-currency-restaurant");
-      const notesRestaurantInput = document.getElementById("field-notes-restaurant");
+      const priceRestaurantInput = document.getElementById(
+        "field-price-restaurant"
+      );
+      const currencyRestaurantInput = document.getElementById(
+        "field-currency-restaurant"
+      );
+      const notesRestaurantInput = document.getElementById(
+        "field-notes-restaurant"
+      );
 
       if (data.restaurant_name && restaurantNameInput) {
         restaurantNameInput.value = data.restaurant_name;
@@ -2092,12 +3691,20 @@ async function handleAiFillFromScreenshot() {
           console.error("Error parsing visit datetime:", dateError);
         }
       }
-      if (data.party_size !== null && data.party_size !== undefined && partySizeInput) {
+      if (
+        data.party_size !== null &&
+        data.party_size !== undefined &&
+        partySizeInput
+      ) {
         partySizeInput.value = data.party_size;
         fieldsFilled++;
         console.log("Filled party size:", data.party_size);
       }
-      if (data.price !== null && data.price !== undefined && priceRestaurantInput) {
+      if (
+        data.price !== null &&
+        data.price !== undefined &&
+        priceRestaurantInput
+      ) {
         priceRestaurantInput.value = data.price;
         fieldsFilled++;
         console.log("Filled price:", data.price);
@@ -2114,7 +3721,8 @@ async function handleAiFillFromScreenshot() {
       if (data.notes && notesRestaurantInput) {
         const existingNotes = notesRestaurantInput.value.trim();
         if (existingNotes) {
-          notesRestaurantInput.value = existingNotes + "\n\n[AI Extracted]: " + data.notes;
+          notesRestaurantInput.value =
+            existingNotes + "\n\n[AI Extracted]: " + data.notes;
         } else {
           notesRestaurantInput.value = "[AI Extracted]: " + data.notes;
         }
@@ -2124,31 +3732,62 @@ async function handleAiFillFromScreenshot() {
 
       // Handle dishes extraction
       if (data.dishes && Array.isArray(data.dishes) && data.dishes.length > 0) {
-        extractedDishes = data.dishes.map(dish => ({
-          name: dish.name || "",
-          price: typeof dish.price === "number" ? dish.price : 
-                 typeof dish.price === "string" ? parseFloat(dish.price.replace(/[^0-9.-]/g, "")) : 0
-        })).filter(dish => dish.name && dish.price > 0);
-        
+        extractedDishes = data.dishes
+          .map((dish) => ({
+            name: dish.name || "",
+            price:
+              typeof dish.price === "number"
+                ? dish.price
+                : typeof dish.price === "string"
+                  ? parseFloat(dish.price.replace(/[^0-9.-]/g, ""))
+                  : 0,
+          }))
+          .filter((dish) => dish.name && dish.price > 0);
+
         // Display dishes in the UI
         renderDishesList();
         fieldsFilled++;
-        console.log("Extracted and displayed", extractedDishes.length, "dishes");
+        console.log(
+          "Extracted and displayed",
+          extractedDishes.length,
+          "dishes"
+        );
       }
-      
-      console.log("Restaurant extraction complete. Total fields filled:", fieldsFilled);
-    } else if (currentCategoryType === 'attraction') {
+
+      console.log(
+        "Restaurant extraction complete. Total fields filled:",
+        fieldsFilled
+      );
+    } else if (currentCategoryType === "attraction") {
       // Attraction-specific fields
-      const attractionNameInput = document.getElementById("field-attraction-name");
-      const locationTextInput = document.getElementById("field-location-text-attraction");
-      const googleMapsUrlInput = document.getElementById("field-google-maps-url-attraction");
-      const visitDateTimeInput = document.getElementById("field-visit-datetime-attraction");
+      const attractionNameInput = document.getElementById(
+        "field-attraction-name"
+      );
+      const locationTextInput = document.getElementById(
+        "field-location-text-attraction"
+      );
+      const googleMapsUrlInput = document.getElementById(
+        "field-google-maps-url-attraction"
+      );
+      const visitDateTimeInput = document.getElementById(
+        "field-visit-datetime-attraction"
+      );
       const ticketCountInput = document.getElementById("field-ticket-count");
-      const ticketPricePerPersonInput = document.getElementById("field-ticket-price-per-person");
-      const priceAttractionInput = document.getElementById("field-price-attraction");
-      const currencyAttractionInput = document.getElementById("field-currency-attraction");
-      const platformAttractionInput = document.getElementById("field-platform-attraction");
-      const notesAttractionInput = document.getElementById("field-notes-attraction");
+      const ticketPricePerPersonInput = document.getElementById(
+        "field-ticket-price-per-person"
+      );
+      const priceAttractionInput = document.getElementById(
+        "field-price-attraction"
+      );
+      const currencyAttractionInput = document.getElementById(
+        "field-currency-attraction"
+      );
+      const platformAttractionInput = document.getElementById(
+        "field-platform-attraction"
+      );
+      const notesAttractionInput = document.getElementById(
+        "field-notes-attraction"
+      );
 
       if (data.attraction_name && attractionNameInput) {
         attractionNameInput.value = data.attraction_name;
@@ -2183,17 +3822,32 @@ async function handleAiFillFromScreenshot() {
           console.error("Error parsing visit datetime:", dateError);
         }
       }
-      if (data.ticket_count !== null && data.ticket_count !== undefined && ticketCountInput) {
+      if (
+        data.ticket_count !== null &&
+        data.ticket_count !== undefined &&
+        ticketCountInput
+      ) {
         ticketCountInput.value = data.ticket_count;
         fieldsFilled++;
         console.log("Filled ticket count:", data.ticket_count);
       }
-      if (data.ticket_price_per_person !== null && data.ticket_price_per_person !== undefined && ticketPricePerPersonInput) {
+      if (
+        data.ticket_price_per_person !== null &&
+        data.ticket_price_per_person !== undefined &&
+        ticketPricePerPersonInput
+      ) {
         ticketPricePerPersonInput.value = data.ticket_price_per_person;
         fieldsFilled++;
-        console.log("Filled ticket price per person:", data.ticket_price_per_person);
+        console.log(
+          "Filled ticket price per person:",
+          data.ticket_price_per_person
+        );
       }
-      if (data.price !== null && data.price !== undefined && priceAttractionInput) {
+      if (
+        data.price !== null &&
+        data.price !== undefined &&
+        priceAttractionInput
+      ) {
         priceAttractionInput.value = data.price;
         fieldsFilled++;
         console.log("Filled price:", data.price);
@@ -2215,15 +3869,19 @@ async function handleAiFillFromScreenshot() {
       if (data.notes && notesAttractionInput) {
         const existingNotes = notesAttractionInput.value.trim();
         if (existingNotes) {
-          notesAttractionInput.value = existingNotes + "\n\n[AI Extracted]: " + data.notes;
+          notesAttractionInput.value =
+            existingNotes + "\n\n[AI Extracted]: " + data.notes;
         } else {
           notesAttractionInput.value = "[AI Extracted]: " + data.notes;
         }
         fieldsFilled++;
         console.log("Filled notes");
       }
-      
-      console.log("Attraction extraction complete. Total fields filled:", fieldsFilled);
+
+      console.log(
+        "Attraction extraction complete. Total fields filled:",
+        fieldsFilled
+      );
     } else {
       // Flight-specific fields (default)
       if (data.airline && airlineInput) {
@@ -2315,7 +3973,8 @@ async function handleAiFillFromScreenshot() {
       if (data.notes && notesInput) {
         const existingNotes = notesInput.value.trim();
         if (existingNotes) {
-          notesInput.value = existingNotes + "\n\n[AI Extracted]: " + data.notes;
+          notesInput.value =
+            existingNotes + "\n\n[AI Extracted]: " + data.notes;
         } else {
           notesInput.value = "[AI Extracted]: " + data.notes;
         }
@@ -2349,7 +4008,11 @@ async function handleAiFillFromScreenshot() {
   } finally {
     // Restore button state
     aiFillBtn.disabled = false;
-    aiFillBtn.classList.remove("loading");
+    aiFillBtn.classList.remove("loading", "btn-loading");
+    // Restore original button content
+    const originalText =
+      aiFillBtn.getAttribute("data-original-html") ||
+      '<span class="btn-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/><circle cx="12" cy="12" r="4"/></svg></span><span class="btn-text">Analyze with AI</span>';
     aiFillBtn.innerHTML = originalText;
   }
 }
@@ -2362,7 +4025,7 @@ function renderDishesList() {
   if (!dishesList) return;
 
   dishesList.innerHTML = "";
-  
+
   if (extractedDishes.length === 0) {
     return;
   }
@@ -2384,9 +4047,9 @@ function renderDishesList() {
   });
 
   // Attach remove handlers
-  dishesList.querySelectorAll('.btn-remove-dish').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const index = parseInt(btn.getAttribute('data-index'));
+  dishesList.querySelectorAll(".btn-remove-dish").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      const index = parseInt(btn.getAttribute("data-index"));
       removeDish(index);
     });
   });
@@ -2439,8 +4102,10 @@ function removeDish(index) {
  */
 function clearManualForm() {
   // Clear all form fields
-  const allInputs = document.querySelectorAll("#manual-form-view input:not([id='dish-name-input']):not([id='dish-price-input']), #manual-form-view textarea, #manual-form-view select");
-  allInputs.forEach(input => {
+  const allInputs = document.querySelectorAll(
+    "#manual-form-view input:not([id='dish-name-input']):not([id='dish-price-input']), #manual-form-view textarea, #manual-form-view select"
+  );
+  allInputs.forEach((input) => {
     if (input.type === "file") {
       input.value = "";
     } else if (input.tagName === "SELECT") {
@@ -2468,21 +4133,21 @@ function clearManualForm() {
   currentFileName = null;
   extractedDishes = [];
   editingBookingId = null;
-  
+
   // Clear dishes display
   const dishesList = document.getElementById("restaurant-dishes-list");
   if (dishesList) {
     dishesList.innerHTML = "";
   }
-  
+
   // Clear file preview
   updateFilePreview();
-  
+
   // Clear saved form data
   if (currentCategoryType) {
     chrome.storage.local.remove([`formData_${currentCategoryType}`]);
   }
-  
+
   chrome.storage.local.remove(["lastScreenshot", "lastScreenshotRegion"]);
 }
 
@@ -2509,7 +4174,7 @@ async function editBooking(bookingId) {
         flight: "Flight",
         hotel: "Hotel",
         restaurant: "Restaurant",
-        attraction: "Attraction"
+        attraction: "Attraction",
       };
       titleElement.textContent = `Edit ${categoryNames[booking.type]} booking`;
     }
@@ -2526,55 +4191,120 @@ async function editBooking(bookingId) {
 
     // Load data based on type
     if (booking.type === "flight") {
-      if (booking.airline) document.getElementById("field-airline").value = booking.airline;
-      if (booking.flightNumber) document.getElementById("field-flight-number").value = booking.flightNumber;
-      if (booking.origin) document.getElementById("field-origin").value = booking.origin;
-      if (booking.destination) document.getElementById("field-destination").value = booking.destination;
-      if (booking.departureDateTime) document.getElementById("field-departure").value = booking.departureDateTime;
-      if (booking.arrivalDateTime) document.getElementById("field-arrival").value = booking.arrivalDateTime;
-      if (booking.totalPrice) document.getElementById("field-price").value = booking.totalPrice;
-      if (booking.currency) document.getElementById("field-currency").value = booking.currency;
-      if (booking.reference) document.getElementById("field-reference").value = booking.reference;
-      if (booking.notes) document.getElementById("field-notes").value = booking.notes;
+      if (booking.airline)
+        document.getElementById("field-airline").value = booking.airline;
+      if (booking.flightNumber)
+        document.getElementById("field-flight-number").value =
+          booking.flightNumber;
+      if (booking.origin)
+        document.getElementById("field-origin").value = booking.origin;
+      if (booking.destination)
+        document.getElementById("field-destination").value =
+          booking.destination;
+      if (booking.departureDateTime)
+        document.getElementById("field-departure").value =
+          booking.departureDateTime;
+      if (booking.arrivalDateTime)
+        document.getElementById("field-arrival").value =
+          booking.arrivalDateTime;
+      if (booking.totalPrice)
+        document.getElementById("field-price").value = booking.totalPrice;
+      if (booking.currency)
+        document.getElementById("field-currency").value = booking.currency;
+      if (booking.reference)
+        document.getElementById("field-reference").value = booking.reference;
+      if (booking.notes)
+        document.getElementById("field-notes").value = booking.notes;
     } else if (booking.type === "hotel") {
-      if (booking.hotelName) document.getElementById("field-hotel-name").value = booking.hotelName;
-      if (booking.hotelAddress) document.getElementById("field-hotel-address").value = booking.hotelAddress;
-      if (booking.city) document.getElementById("field-city").value = booking.city;
-      if (booking.country) document.getElementById("field-country").value = booking.country;
-      if (booking.checkInDate) document.getElementById("field-check-in").value = booking.checkInDate;
-      if (booking.checkOutDate) document.getElementById("field-check-out").value = booking.checkOutDate;
-      if (booking.nights) document.getElementById("field-nights").value = booking.nights;
-      if (booking.roomType) document.getElementById("field-room-type").value = booking.roomType;
-      if (booking.guests) document.getElementById("field-guests").value = booking.guests;
-      if (booking.totalPrice) document.getElementById("field-price-hotel").value = booking.totalPrice;
-      if (booking.currency) document.getElementById("field-currency-hotel").value = booking.currency;
-      if (booking.platform) document.getElementById("field-platform-hotel").value = booking.platform;
-      if (booking.reservationId) document.getElementById("field-reservation-id").value = booking.reservationId;
-      if (booking.notes) document.getElementById("field-notes-hotel").value = booking.notes;
+      if (booking.hotelName)
+        document.getElementById("field-hotel-name").value = booking.hotelName;
+      if (booking.hotelAddress)
+        document.getElementById("field-hotel-address").value =
+          booking.hotelAddress;
+      if (booking.city)
+        document.getElementById("field-city").value = booking.city;
+      if (booking.country)
+        document.getElementById("field-country").value = booking.country;
+      if (booking.checkInDate)
+        document.getElementById("field-check-in").value = booking.checkInDate;
+      if (booking.checkOutDate)
+        document.getElementById("field-check-out").value = booking.checkOutDate;
+      if (booking.nights)
+        document.getElementById("field-nights").value = booking.nights;
+      if (booking.roomType)
+        document.getElementById("field-room-type").value = booking.roomType;
+      if (booking.guests)
+        document.getElementById("field-guests").value = booking.guests;
+      if (booking.totalPrice)
+        document.getElementById("field-price-hotel").value = booking.totalPrice;
+      if (booking.currency)
+        document.getElementById("field-currency-hotel").value =
+          booking.currency;
+      if (booking.platform)
+        document.getElementById("field-platform-hotel").value =
+          booking.platform;
+      if (booking.reservationId)
+        document.getElementById("field-reservation-id").value =
+          booking.reservationId;
+      if (booking.notes)
+        document.getElementById("field-notes-hotel").value = booking.notes;
     } else if (booking.type === "restaurant") {
-      if (booking.restaurantName) document.getElementById("field-restaurant-name").value = booking.restaurantName;
-      if (booking.locationText) document.getElementById("field-location-text").value = booking.locationText;
-      if (booking.googleMapsUrl) document.getElementById("field-google-maps-url").value = booking.googleMapsUrl;
-      if (booking.visitDateTime) document.getElementById("field-visit-datetime").value = booking.visitDateTime;
-      if (booking.partySize) document.getElementById("field-party-size").value = booking.partySize;
-      if (booking.totalPrice) document.getElementById("field-price-restaurant").value = booking.totalPrice;
-      if (booking.currency) document.getElementById("field-currency-restaurant").value = booking.currency;
-      if (booking.notes) document.getElementById("field-notes-restaurant").value = booking.notes;
+      if (booking.restaurantName)
+        document.getElementById("field-restaurant-name").value =
+          booking.restaurantName;
+      if (booking.locationText)
+        document.getElementById("field-location-text").value =
+          booking.locationText;
+      if (booking.googleMapsUrl)
+        document.getElementById("field-google-maps-url").value =
+          booking.googleMapsUrl;
+      if (booking.visitDateTime)
+        document.getElementById("field-visit-datetime").value =
+          booking.visitDateTime;
+      if (booking.partySize)
+        document.getElementById("field-party-size").value = booking.partySize;
+      if (booking.totalPrice)
+        document.getElementById("field-price-restaurant").value =
+          booking.totalPrice;
+      if (booking.currency)
+        document.getElementById("field-currency-restaurant").value =
+          booking.currency;
+      if (booking.notes)
+        document.getElementById("field-notes-restaurant").value = booking.notes;
       if (booking.dishes && Array.isArray(booking.dishes)) {
         extractedDishes = booking.dishes;
         renderDishesList();
       }
     } else if (booking.type === "attraction") {
-      if (booking.attractionName) document.getElementById("field-attraction-name").value = booking.attractionName;
-      if (booking.locationText) document.getElementById("field-location-text-attraction").value = booking.locationText;
-      if (booking.googleMapsUrl) document.getElementById("field-google-maps-url-attraction").value = booking.googleMapsUrl;
-      if (booking.visitDateTime) document.getElementById("field-visit-datetime-attraction").value = booking.visitDateTime;
-      if (booking.ticketCount) document.getElementById("field-ticket-count").value = booking.ticketCount;
-      if (booking.ticketPricePerPerson) document.getElementById("field-ticket-price-per-person").value = booking.ticketPricePerPerson;
-      if (booking.totalPrice) document.getElementById("field-price-attraction").value = booking.totalPrice;
-      if (booking.currency) document.getElementById("field-currency-attraction").value = booking.currency;
-      if (booking.platform) document.getElementById("field-platform-attraction").value = booking.platform;
-      if (booking.notes) document.getElementById("field-notes-attraction").value = booking.notes;
+      if (booking.attractionName)
+        document.getElementById("field-attraction-name").value =
+          booking.attractionName;
+      if (booking.locationText)
+        document.getElementById("field-location-text-attraction").value =
+          booking.locationText;
+      if (booking.googleMapsUrl)
+        document.getElementById("field-google-maps-url-attraction").value =
+          booking.googleMapsUrl;
+      if (booking.visitDateTime)
+        document.getElementById("field-visit-datetime-attraction").value =
+          booking.visitDateTime;
+      if (booking.ticketCount)
+        document.getElementById("field-ticket-count").value =
+          booking.ticketCount;
+      if (booking.ticketPricePerPerson)
+        document.getElementById("field-ticket-price-per-person").value =
+          booking.ticketPricePerPerson;
+      if (booking.totalPrice)
+        document.getElementById("field-price-attraction").value =
+          booking.totalPrice;
+      if (booking.currency)
+        document.getElementById("field-currency-attraction").value =
+          booking.currency;
+      if (booking.platform)
+        document.getElementById("field-platform-attraction").value =
+          booking.platform;
+      if (booking.notes)
+        document.getElementById("field-notes-attraction").value = booking.notes;
     }
 
     // Update Google Maps buttons visibility
@@ -2600,84 +4330,64 @@ async function editBooking(bookingId) {
  */
 async function loadHistoryBookings(filterType = "all") {
   try {
-    // TODO: sync with backend
-    const bookings = await getBookings();
+    const auth = await getAuth();
+    if (!auth || !auth.token) {
+      historyList.innerHTML =
+        '<div class="empty-state">Please login to view expenses</div>';
+      return;
+    }
 
-    // Filter by type
-    let filteredBookings = bookings;
+    const tripId = await getCurrentTripId();
+    if (!tripId) {
+      historyList.innerHTML =
+        '<div class="empty-state">Please select or create a trip to view expenses</div>';
+      return;
+    }
+
+    // Load expenses from backend
+    const expenses = await getExpenses(auth.token, tripId);
+
+    // Filter by category
+    let filteredExpenses = expenses;
     if (filterType !== "all") {
-      filteredBookings = bookings.filter(b => b.type === filterType);
+      filteredExpenses = expenses.filter((e) => e.category === filterType);
     }
 
     // Sort by createdAt descending (newest first)
-    const sortedBookings = filteredBookings.sort((a, b) => {
-      return new Date(b.createdAt) - new Date(a.createdAt);
+    const sortedExpenses = filteredExpenses.sort((a, b) => {
+      const dateA = new Date(a.createdAt || a.created_at || 0);
+      const dateB = new Date(b.createdAt || b.created_at || 0);
+      return dateB - dateA;
     });
 
     // Clear list
     historyList.innerHTML = "";
 
-    if (sortedBookings.length === 0) {
+    if (sortedExpenses.length === 0) {
       const div = document.createElement("div");
       div.className = "empty-state";
-      div.textContent = "No bookings found";
+      div.textContent = "No expenses found for this trip";
       historyList.appendChild(div);
     } else {
-      sortedBookings.forEach((booking) => {
+      sortedExpenses.forEach((expense) => {
         const card = document.createElement("div");
         card.className = "history-card";
 
-        // Badge for type
+        // Badge for category
         const badge = document.createElement("span");
-        badge.className = `history-badge history-badge-${booking.type}`;
-        const typeNames = {
-          flight: "Flight",
-          hotel: "Hotel",
-          restaurant: "Restaurant",
-          attraction: "Attraction"
-        };
-        badge.textContent = typeNames[booking.type] || booking.type;
+        badge.className = "history-badge history-badge-default";
+        badge.textContent = "Expense";
 
-        // Title
+        // Title (description)
         const title = document.createElement("div");
         title.className = "history-title";
-        title.textContent = booking.title || (booking.type === "flight" ? `${booking.origin} → ${booking.destination}` : "Untitled");
+        title.textContent = expense.description || "Untitled Expense";
 
         // Date
         const date = document.createElement("div");
         date.className = "history-date";
-        
-        // Dishes (for restaurant bookings)
-        let dishesSection = null;
-        if (booking.type === "restaurant" && booking.dishes && Array.isArray(booking.dishes) && booking.dishes.length > 0) {
-          dishesSection = document.createElement("div");
-          dishesSection.className = "history-dishes";
-          const dishesTitle = document.createElement("div");
-          dishesTitle.className = "history-dishes-title";
-          dishesTitle.textContent = "Dishes:";
-          dishesSection.appendChild(dishesTitle);
-          
-          const dishesList = document.createElement("div");
-          dishesList.className = "history-dishes-list";
-          booking.dishes.forEach(dish => {
-            const dishItem = document.createElement("div");
-            dishItem.className = "history-dish-item";
-            dishItem.innerHTML = `
-              <span class="dish-name">${dish.name || "Unknown"}</span>
-              <span class="dish-price">${(dish.price || 0).toFixed(2)} ${booking.currency || ""}</span>
-            `;
-            dishesList.appendChild(dishItem);
-          });
-          dishesSection.appendChild(dishesList);
-        }
-        let dateValue = booking.createdAt;
-        if (booking.type === "flight" && booking.departureDateTime) {
-          dateValue = booking.departureDateTime;
-        } else if (booking.type === "hotel" && booking.checkInDate) {
-          dateValue = booking.checkInDate;
-        } else if ((booking.type === "restaurant" || booking.type === "attraction") && booking.visitDateTime) {
-          dateValue = booking.visitDateTime;
-        }
+        const dateValue =
+          expense.createdAt || expense.created_at || new Date().toISOString();
         const dateObj = new Date(dateValue);
         date.textContent = dateObj.toLocaleDateString("en-US", {
           year: "numeric",
@@ -2685,13 +4395,18 @@ async function loadHistoryBookings(filterType = "all") {
           day: "numeric",
         });
 
-        // Price
+        // Amount
         const price = document.createElement("div");
         price.className = "history-price";
-        const priceFormatted = new Intl.NumberFormat().format(booking.totalPrice || booking.price || 0);
-        price.textContent = `${priceFormatted} ${booking.currency || "TWD"}`;
+        const priceFormatted = new Intl.NumberFormat().format(
+          expense.amount || 0
+        );
+        price.textContent = `$${priceFormatted}`;
 
-        // Edit button
+        // Edit and Delete buttons
+        const actions = document.createElement("div");
+        actions.className = "history-actions";
+
         const editBtn = document.createElement("button");
         editBtn.className = "btn-edit-booking";
         editBtn.innerHTML = `
@@ -2699,27 +4414,99 @@ async function loadHistoryBookings(filterType = "all") {
             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
           </svg>
-          Edit
         `;
-        editBtn.addEventListener("click", (e) => {
+        editBtn.title = "Edit expense";
+        editBtn.addEventListener("click", async (e) => {
           e.stopPropagation();
-          editBooking(booking.id);
+          await editExpense(expense.id);
         });
+
+        const deleteBtn = document.createElement("button");
+        deleteBtn.className = "btn-delete-booking";
+        deleteBtn.innerHTML = `
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+          </svg>
+        `;
+        deleteBtn.title = "Delete expense";
+        deleteBtn.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          if (confirm("Are you sure you want to delete this expense?")) {
+            await deleteExpenseHandler(expense.id);
+          }
+        });
+
+        actions.appendChild(editBtn);
+        actions.appendChild(deleteBtn);
 
         card.appendChild(badge);
         card.appendChild(title);
         card.appendChild(date);
         card.appendChild(price);
-        card.appendChild(editBtn);
-        if (dishesSection) {
-          card.appendChild(dishesSection);
-        }
+        card.appendChild(actions);
         historyList.appendChild(card);
       });
     }
   } catch (error) {
     console.error("Load history error:", error);
-    historyList.innerHTML = '<div class="empty-state">Error loading bookings</div>';
+    historyList.innerHTML =
+      '<div class="empty-state">Error loading expenses</div>';
+  }
+}
+
+/**
+ * Delete expense handler
+ */
+async function deleteExpenseHandler(expenseId) {
+  try {
+    const auth = await getAuth();
+    if (!auth || !auth.token) {
+      showAuthView();
+      return;
+    }
+
+    await deleteExpense(auth.token, expenseId);
+
+    // Reload expenses
+    const tripId = await getCurrentTripId();
+    if (tripId) {
+      await loadHistoryBookings();
+    }
+
+    alert("Expense deleted!");
+  } catch (error) {
+    console.error("Error deleting expense:", error);
+    alert("Failed to delete expense: " + error.message);
+  }
+}
+
+/**
+ * Edit expense handler
+ */
+async function editExpense(expenseId) {
+  try {
+    const auth = await getAuth();
+    if (!auth || !auth.token) {
+      showAuthView();
+      return;
+    }
+
+    const expense = await getExpenseDetail(auth.token, expenseId);
+
+    // Set editing mode
+    editingBookingId = expenseId;
+    // Default to flight category for editing (category field removed from database)
+    currentCategoryType = "flight";
+
+    // Show manual form with expense data
+    showManualFormView(currentCategoryType, { fromScreenshot: false });
+
+    // Fill form with expense data (simplified - just description and amount for now)
+    // In a full implementation, you'd map all fields back to the form
+  } catch (error) {
+    console.error("Error loading expense:", error);
+    alert("Failed to load expense: " + error.message);
   }
 }
 
@@ -2777,27 +4564,517 @@ function attachEventListeners() {
     });
   }
 
-  // Tab navigation
-  tabAdd.addEventListener("click", () => {
-    showHomeView();
-  });
-  tabHistory.addEventListener("click", async () => {
-    await showHistoryView();
-  });
+  // Trips view event listeners
+  const btnNewTrip = document.getElementById("btn-new-trip");
+  if (btnNewTrip) {
+    btnNewTrip.addEventListener("click", () => {
+      showNewTripView();
+    });
+  }
 
-  // Category buttons
-  btnCategoryFlight.addEventListener("click", () => {
-    showCategoryActionsView("flight");
-  });
-  btnCategoryHotel.addEventListener("click", () => {
-    showCategoryActionsView("hotel");
-  });
-  btnCategoryRestaurant.addEventListener("click", () => {
-    showCategoryActionsView("restaurant");
-  });
-  btnCategoryAttraction.addEventListener("click", () => {
-    showCategoryActionsView("attraction");
-  });
+  const btnBackTrips = document.getElementById("btn-back-trips");
+  if (btnBackTrips) {
+    btnBackTrips.addEventListener("click", () => {
+      showTripsView();
+    });
+  }
+
+  const btnBackToTrips = document.getElementById("btn-back-to-trips");
+  if (btnBackToTrips) {
+    btnBackToTrips.addEventListener("click", async () => {
+      await showTripsView();
+    });
+  }
+
+  const newTripForm = document.getElementById("new-trip-form");
+  if (newTripForm) {
+    newTripForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      await handleCreateTrip();
+    });
+  }
+
+  const btnCancelNewTrip = document.getElementById("btn-cancel-new-trip");
+  if (btnCancelNewTrip) {
+    btnCancelNewTrip.addEventListener("click", () => {
+      showTripsView();
+    });
+  }
+
+  // Trip detail view event listeners
+  const btnEditTripName = document.getElementById("btn-edit-trip-name");
+  const btnSaveTripName = document.getElementById("btn-save-trip-name");
+  const btnCancelTripNameEdit = document.getElementById(
+    "btn-cancel-trip-name-edit"
+  );
+  const tripNameEditInput = document.getElementById("trip-name-edit-input");
+  const tripNameEditContainer = document.getElementById(
+    "trip-name-edit-container"
+  );
+  const tripDetailName = document.getElementById("trip-detail-name");
+
+  if (btnEditTripName) {
+    btnEditTripName.addEventListener("click", () => {
+      if (tripNameEditContainer)
+        tripNameEditContainer.classList.remove("hidden");
+      if (tripDetailName) tripDetailName.style.display = "none";
+      if (tripNameEditInput && tripDetailName) {
+        tripNameEditInput.value = tripDetailName.textContent;
+        tripNameEditInput.focus();
+      }
+    });
+  }
+
+  if (btnSaveTripName) {
+    btnSaveTripName.addEventListener("click", async () => {
+      await handleUpdateTripName();
+    });
+  }
+
+  if (btnCancelTripNameEdit) {
+    btnCancelTripNameEdit.addEventListener("click", () => {
+      if (tripNameEditContainer) tripNameEditContainer.classList.add("hidden");
+      if (tripDetailName) tripDetailName.style.display = "";
+    });
+  }
+
+  const btnAddMember = document.getElementById("btn-add-member");
+  if (btnAddMember) {
+    btnAddMember.addEventListener("click", async () => {
+      await handleAddMember();
+    });
+  }
+
+  const addMemberUsernameInput = document.getElementById(
+    "add-member-username-input"
+  );
+  if (addMemberUsernameInput) {
+    addMemberUsernameInput.addEventListener("keypress", async (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        await handleAddMember();
+      }
+    });
+  }
+
+  // Settlement section removed
+
+  // Trip category buttons (for adding expenses to current trip)
+  const btnTripCategoryFlight = document.getElementById(
+    "btn-trip-category-flight"
+  );
+  const btnTripCategoryHotel = document.getElementById(
+    "btn-trip-category-hotel"
+  );
+  const btnTripCategoryRestaurant = document.getElementById(
+    "btn-trip-category-restaurant"
+  );
+  const btnTripCategoryAttraction = document.getElementById(
+    "btn-trip-category-attraction"
+  );
+
+  if (btnTripCategoryFlight) {
+    btnTripCategoryFlight.addEventListener("click", () => {
+      handleTripCategoryClick("flight");
+    });
+  }
+
+  if (btnTripCategoryHotel) {
+    btnTripCategoryHotel.addEventListener("click", () => {
+      handleTripCategoryClick("hotel");
+    });
+  }
+
+  if (btnTripCategoryRestaurant) {
+    btnTripCategoryRestaurant.addEventListener("click", () => {
+      handleTripCategoryClick("restaurant");
+    });
+  }
+
+  if (btnTripCategoryAttraction) {
+    btnTripCategoryAttraction.addEventListener("click", () => {
+      handleTripCategoryClick("attraction");
+    });
+  }
+
+  // Tab navigation in trip detail view
+  const tabAddTrip = document.getElementById("tab-add-trip");
+  const tabHistoryTrip = document.getElementById("tab-history-trip");
+  const tabAddTripContent = document.getElementById("tab-add-trip-content");
+  const tabHistoryTripContent = document.getElementById(
+    "tab-history-trip-content"
+  );
+
+  if (tabAddTrip) {
+    tabAddTrip.addEventListener(
+      "click",
+      (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (tabAddTrip) tabAddTrip.classList.add("active");
+        if (tabHistoryTrip) tabHistoryTrip.classList.remove("active");
+        if (tabAddTripContent) tabAddTripContent.classList.remove("hidden");
+        if (tabHistoryTripContent)
+          tabHistoryTripContent.classList.add("hidden");
+      },
+      { passive: false }
+    );
+  }
+
+  if (tabHistoryTrip) {
+    tabHistoryTrip.addEventListener(
+      "click",
+      async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (tabHistoryTrip) tabHistoryTrip.classList.add("active");
+        if (tabAddTrip) tabAddTrip.classList.remove("active");
+        if (tabHistoryTripContent)
+          tabHistoryTripContent.classList.remove("hidden");
+        if (tabAddTripContent) tabAddTripContent.classList.add("hidden");
+
+        // Load expenses when switching to history tab
+        const tripId = await getCurrentTripId();
+        if (tripId) {
+          await loadTripExpensesHistory(tripId);
+        }
+      },
+      { passive: false }
+    );
+  }
+
+  // Toggle members collapsible
+  const btnToggleMembers = document.getElementById("btn-toggle-members");
+  const tripMembersCollapsible = document.getElementById(
+    "trip-members-collapsible"
+  );
+  const toggleMembersIcon = document.getElementById("toggle-members-icon");
+  const tripNameHeader = document.getElementById("trip-name-header");
+
+  if (btnToggleMembers && tripMembersCollapsible) {
+    btnToggleMembers.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const isHidden = tripMembersCollapsible.classList.contains("hidden");
+      tripMembersCollapsible.classList.toggle("hidden");
+      if (toggleMembersIcon) {
+        toggleMembersIcon.style.transform = isHidden
+          ? "rotate(180deg)"
+          : "rotate(0deg)";
+      }
+    });
+  }
+
+  // Click trip name header to toggle members
+  if (tripNameHeader && tripMembersCollapsible) {
+    tripNameHeader.addEventListener("click", (e) => {
+      // Don't toggle if clicking on edit button
+      if (
+        e.target.closest("#btn-edit-trip-name") ||
+        e.target.closest("#btn-toggle-members")
+      ) {
+        return;
+      }
+      const isHidden = tripMembersCollapsible.classList.contains("hidden");
+      tripMembersCollapsible.classList.toggle("hidden");
+      if (toggleMembersIcon) {
+        toggleMembersIcon.style.transform = isHidden
+          ? "rotate(180deg)"
+          : "rotate(0deg)";
+      }
+    });
+  }
+
+  // Profile edit button
+  const btnEditProfile = document.getElementById("btn-edit-profile");
+  if (btnEditProfile) {
+    btnEditProfile.addEventListener("click", () => {
+      showProfileEditModal();
+    });
+  }
+
+  // Profile modal event listeners
+  const profileModalClose = document.getElementById("profile-modal-close");
+  const profileEditBtnModal = document.getElementById("profile-edit-btn-modal");
+  const profileEditForm = document.getElementById("profile-edit-form");
+  const profileCancelEditBtn = document.getElementById(
+    "profile-cancel-edit-btn"
+  );
+  const profileLogoutBtn = document.getElementById("profile-logout-btn");
+
+  if (profileModalClose) {
+    profileModalClose.addEventListener("click", () => {
+      if (profileModal) profileModal.classList.add("hidden");
+      // Reset to display view
+      const profileDisplayView = document.getElementById(
+        "profile-display-view"
+      );
+      const profileEditView = document.getElementById("profile-edit-view");
+      if (profileDisplayView) profileDisplayView.classList.remove("hidden");
+      if (profileEditView) profileEditView.classList.add("hidden");
+    });
+  }
+
+  if (profileEditBtnModal) {
+    profileEditBtnModal.addEventListener("click", () => {
+      showProfileEditModal();
+    });
+  }
+
+  if (profileEditForm) {
+    profileEditForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      await handleProfileUpdate();
+    });
+  }
+
+  if (profileCancelEditBtn) {
+    profileCancelEditBtn.addEventListener("click", () => {
+      const profileDisplayView = document.getElementById(
+        "profile-display-view"
+      );
+      const profileEditView = document.getElementById("profile-edit-view");
+      if (profileDisplayView) profileDisplayView.classList.remove("hidden");
+      if (profileEditView) profileEditView.classList.add("hidden");
+    });
+  }
+
+  if (profileLogoutBtn) {
+    profileLogoutBtn.addEventListener("click", async () => {
+      await clearAuth();
+      await setCurrentTripId(null);
+      showAuthView();
+      if (profileModal) profileModal.classList.add("hidden");
+    });
+  }
+
+  // Category actions in trip detail view
+  const btnCategoryBackTrip = document.getElementById("btn-category-back-trip");
+  const btnCategoryScreenshotTrip = document.getElementById(
+    "btn-category-screenshot-trip"
+  );
+  const btnCategoryUploadTrip = document.getElementById(
+    "btn-category-upload-trip"
+  );
+  const btnCategoryManualTrip = document.getElementById(
+    "btn-category-manual-trip"
+  );
+  const fileInputTrip = document.getElementById("file-input-trip");
+  const screenshotOptionsTrip = document.getElementById(
+    "screenshot-options-trip"
+  );
+  const btnScreenshotFullTrip = document.getElementById(
+    "btn-screenshot-full-trip"
+  );
+  const btnScreenshotRegionTrip = document.getElementById(
+    "btn-screenshot-region-trip"
+  );
+  const btnScreenshotCancelTrip = document.getElementById(
+    "btn-screenshot-cancel-trip"
+  );
+
+  if (btnCategoryBackTrip) {
+    btnCategoryBackTrip.addEventListener("click", () => {
+      const homeViewTrip = document.getElementById("home-view-trip");
+      const categoryActionsViewTrip = document.getElementById(
+        "category-actions-view-trip"
+      );
+      if (homeViewTrip) homeViewTrip.classList.remove("hidden");
+      if (categoryActionsViewTrip)
+        categoryActionsViewTrip.classList.add("hidden");
+    });
+  }
+
+  if (btnCategoryScreenshotTrip) {
+    btnCategoryScreenshotTrip.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (screenshotOptionsTrip)
+        screenshotOptionsTrip.classList.remove("hidden");
+    });
+  }
+
+  if (btnCategoryUploadTrip) {
+    btnCategoryUploadTrip.addEventListener("click", () => {
+      if (fileInputTrip) fileInputTrip.click();
+    });
+  }
+
+  if (btnCategoryManualTrip) {
+    btnCategoryManualTrip.addEventListener("click", () => {
+      // Show manual form view
+      showManualFormView(currentCategoryType, { fromScreenshot: false });
+      // Hide category actions in trip detail
+      const categoryActionsViewTrip = document.getElementById(
+        "category-actions-view-trip"
+      );
+      if (categoryActionsViewTrip)
+        categoryActionsViewTrip.classList.add("hidden");
+    });
+  }
+
+  if (fileInputTrip) {
+    fileInputTrip.addEventListener("change", handleFileChange);
+  }
+
+  if (btnScreenshotFullTrip) {
+    btnScreenshotFullTrip.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (screenshotOptionsTrip) screenshotOptionsTrip.classList.add("hidden");
+      handleScreenshotFull(e);
+    });
+  }
+
+  if (btnScreenshotRegionTrip) {
+    btnScreenshotRegionTrip.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (screenshotOptionsTrip) screenshotOptionsTrip.classList.add("hidden");
+      handleScreenshotRegion(e);
+    });
+  }
+
+  if (btnScreenshotCancelTrip) {
+    btnScreenshotCancelTrip.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (screenshotOptionsTrip) screenshotOptionsTrip.classList.add("hidden");
+    });
+  }
+
+  // History filter buttons in trip detail view
+  const historyFilterAllTrip = document.getElementById(
+    "history-filter-all-trip"
+  );
+  const historyFilterFlightTrip = document.getElementById(
+    "history-filter-flight-trip"
+  );
+  const historyFilterHotelTrip = document.getElementById(
+    "history-filter-hotel-trip"
+  );
+  const historyFilterRestaurantTrip = document.getElementById(
+    "history-filter-restaurant-trip"
+  );
+  const historyFilterAttractionTrip = document.getElementById(
+    "history-filter-attraction-trip"
+  );
+
+  const setActiveFilterTrip = (activeBtn) => {
+    [
+      historyFilterAllTrip,
+      historyFilterFlightTrip,
+      historyFilterHotelTrip,
+      historyFilterRestaurantTrip,
+      historyFilterAttractionTrip,
+    ].forEach((btn) => {
+      if (btn) btn.classList.remove("active");
+    });
+    if (activeBtn) activeBtn.classList.add("active");
+  };
+
+  if (historyFilterAllTrip) {
+    historyFilterAllTrip.addEventListener("click", async () => {
+      setActiveFilterTrip(historyFilterAllTrip);
+      const tripId = await getCurrentTripId();
+      if (tripId) {
+        await loadTripExpensesHistory(tripId, "all");
+      }
+    });
+  }
+
+  if (historyFilterFlightTrip) {
+    historyFilterFlightTrip.addEventListener("click", async () => {
+      setActiveFilterTrip(historyFilterFlightTrip);
+      const tripId = await getCurrentTripId();
+      if (tripId) {
+        await loadTripExpensesHistory(tripId, "flight");
+      }
+    });
+  }
+
+  if (historyFilterHotelTrip) {
+    historyFilterHotelTrip.addEventListener("click", async () => {
+      setActiveFilterTrip(historyFilterHotelTrip);
+      const tripId = await getCurrentTripId();
+      if (tripId) {
+        await loadTripExpensesHistory(tripId, "hotel");
+      }
+    });
+  }
+
+  if (historyFilterRestaurantTrip) {
+    historyFilterRestaurantTrip.addEventListener("click", async () => {
+      setActiveFilterTrip(historyFilterRestaurantTrip);
+      const tripId = await getCurrentTripId();
+      if (tripId) {
+        await loadTripExpensesHistory(tripId, "restaurant");
+      }
+    });
+  }
+
+  if (historyFilterAttractionTrip) {
+    historyFilterAttractionTrip.addEventListener("click", async () => {
+      setActiveFilterTrip(historyFilterAttractionTrip);
+      const tripId = await getCurrentTripId();
+      if (tripId) {
+        await loadTripExpensesHistory(tripId, "attraction");
+      }
+    });
+  }
+
+  // Tab navigation (old dashboard - keep for backward compatibility)
+  if (tabAdd) {
+    tabAdd.addEventListener("click", () => {
+      showHomeView();
+    });
+  }
+  if (tabHistory) {
+    tabHistory.addEventListener("click", async () => {
+      await showHistoryView();
+    });
+  }
+
+  // Category buttons (check for current trip)
+  if (btnCategoryFlight) {
+    btnCategoryFlight.addEventListener("click", async () => {
+      const tripId = await getCurrentTripId();
+      if (!tripId) {
+        alert("Please select or create a trip first");
+        return;
+      }
+      showCategoryActionsView("flight");
+    });
+  }
+  if (btnCategoryHotel) {
+    btnCategoryHotel.addEventListener("click", async () => {
+      const tripId = await getCurrentTripId();
+      if (!tripId) {
+        alert("Please select or create a trip first");
+        return;
+      }
+      showCategoryActionsView("hotel");
+    });
+  }
+  if (btnCategoryRestaurant) {
+    btnCategoryRestaurant.addEventListener("click", async () => {
+      const tripId = await getCurrentTripId();
+      if (!tripId) {
+        alert("Please select or create a trip first");
+        return;
+      }
+      showCategoryActionsView("restaurant");
+    });
+  }
+  if (btnCategoryAttraction) {
+    btnCategoryAttraction.addEventListener("click", async () => {
+      const tripId = await getCurrentTripId();
+      if (!tripId) {
+        alert("Please select or create a trip first");
+        return;
+      }
+      showCategoryActionsView("attraction");
+    });
+  }
 
   // Category action buttons
   btnCategoryScreenshot.addEventListener("click", (e) => {
@@ -2843,7 +5120,9 @@ function attachEventListeners() {
   }
 
   // Google Maps buttons
-  const btnOpenGmapsRestaurant = document.getElementById("btn-open-gmaps-restaurant");
+  const btnOpenGmapsRestaurant = document.getElementById(
+    "btn-open-gmaps-restaurant"
+  );
   if (btnOpenGmapsRestaurant) {
     btnOpenGmapsRestaurant.addEventListener("click", (e) => {
       e.preventDefault();
@@ -2854,11 +5133,15 @@ function attachEventListeners() {
     });
   }
 
-  const btnOpenGmapsAttraction = document.getElementById("btn-open-gmaps-attraction");
+  const btnOpenGmapsAttraction = document.getElementById(
+    "btn-open-gmaps-attraction"
+  );
   if (btnOpenGmapsAttraction) {
     btnOpenGmapsAttraction.addEventListener("click", (e) => {
       e.preventDefault();
-      const url = document.getElementById("field-google-maps-url-attraction")?.value;
+      const url = document.getElementById(
+        "field-google-maps-url-attraction"
+      )?.value;
       if (url) {
         chrome.tabs.create({ url });
       }
@@ -2866,13 +5149,17 @@ function attachEventListeners() {
   }
 
   // Update Google Maps buttons on URL field changes
-  const googleMapsUrlRestaurant = document.getElementById("field-google-maps-url");
+  const googleMapsUrlRestaurant = document.getElementById(
+    "field-google-maps-url"
+  );
   if (googleMapsUrlRestaurant) {
     googleMapsUrlRestaurant.addEventListener("input", updateGoogleMapsButtons);
     googleMapsUrlRestaurant.addEventListener("change", updateGoogleMapsButtons);
   }
 
-  const googleMapsUrlAttraction = document.getElementById("field-google-maps-url-attraction");
+  const googleMapsUrlAttraction = document.getElementById(
+    "field-google-maps-url-attraction"
+  );
   if (googleMapsUrlAttraction) {
     googleMapsUrlAttraction.addEventListener("input", updateGoogleMapsButtons);
     googleMapsUrlAttraction.addEventListener("change", updateGoogleMapsButtons);
@@ -2880,27 +5167,37 @@ function attachEventListeners() {
 
   // History filters
   historyFilterAll.addEventListener("click", () => {
-    document.querySelectorAll(".filter-btn").forEach(btn => btn.classList.remove("active"));
+    document
+      .querySelectorAll(".filter-btn")
+      .forEach((btn) => btn.classList.remove("active"));
     historyFilterAll.classList.add("active");
     loadHistoryBookings("all");
   });
   historyFilterFlight.addEventListener("click", () => {
-    document.querySelectorAll(".filter-btn").forEach(btn => btn.classList.remove("active"));
+    document
+      .querySelectorAll(".filter-btn")
+      .forEach((btn) => btn.classList.remove("active"));
     historyFilterFlight.classList.add("active");
     loadHistoryBookings("flight");
   });
   historyFilterHotel.addEventListener("click", () => {
-    document.querySelectorAll(".filter-btn").forEach(btn => btn.classList.remove("active"));
+    document
+      .querySelectorAll(".filter-btn")
+      .forEach((btn) => btn.classList.remove("active"));
     historyFilterHotel.classList.add("active");
     loadHistoryBookings("hotel");
   });
   historyFilterRestaurant.addEventListener("click", () => {
-    document.querySelectorAll(".filter-btn").forEach(btn => btn.classList.remove("active"));
+    document
+      .querySelectorAll(".filter-btn")
+      .forEach((btn) => btn.classList.remove("active"));
     historyFilterRestaurant.classList.add("active");
     loadHistoryBookings("restaurant");
   });
   historyFilterAttraction.addEventListener("click", () => {
-    document.querySelectorAll(".filter-btn").forEach(btn => btn.classList.remove("active"));
+    document
+      .querySelectorAll(".filter-btn")
+      .forEach((btn) => btn.classList.remove("active"));
     historyFilterAttraction.classList.add("active");
     loadHistoryBookings("attraction");
   });
@@ -2916,10 +5213,17 @@ function attachEventListeners() {
     }
 
     if (lastScreenshotDataUrl) {
+      // Hide screenshot preview
+      if (screenshotPreviewView) screenshotPreviewView.classList.add("hidden");
+
+      // Show category buttons back (they will be hidden by manual form view)
+      // But we need to show them if we're in trip detail
+      const isInTripDetail =
+        tripDetailView && !tripDetailView.classList.contains("hidden");
+
       if (currentCategoryType) {
         showManualFormView(currentCategoryType, { fromScreenshot: true });
         manualFormView.classList.remove("hidden");
-        screenshotPreviewView.classList.add("hidden");
         // Clear pending screenshot flag since we've moved to manual form
         chrome.storage.local.set({ pendingScreenshot: false });
         // Save view state
@@ -2928,7 +5232,6 @@ function attachEventListeners() {
         // Fallback to flight
         showManualFormView("flight", { fromScreenshot: true });
         manualFormView.classList.remove("hidden");
-        screenshotPreviewView.classList.add("hidden");
         // Clear pending screenshot flag since we've moved to manual form
         chrome.storage.local.set({ pendingScreenshot: false });
         // Save view state
@@ -2940,14 +5243,59 @@ function attachEventListeners() {
   });
 
   btnRetakeScreenshot.addEventListener("click", async () => {
-    // Clear screenshot and go back to dashboard
+    // Clear screenshot
     lastScreenshotDataUrl = null;
     await chrome.storage.local.remove([
       "lastScreenshot",
       "pendingScreenshot",
       "lastScreenshotRegion",
     ]);
-    await showDashboardView();
+
+    // Hide screenshot preview and move it back to original location
+    if (screenshotPreviewView) {
+      screenshotPreviewView.classList.add("hidden");
+
+      // If screenshot preview was moved into tab content, move it back to its original location
+      const tabAddTripContent = document.getElementById("tab-add-trip-content");
+      if (
+        tabAddTripContent &&
+        screenshotPreviewView.parentNode === tabAddTripContent
+      ) {
+        // Find the trip detail view section to insert after it (original location)
+        const tripDetailSection = document.getElementById("trip-detail-view");
+        if (tripDetailSection && tripDetailSection.parentNode) {
+          // Insert after trip detail section (original location)
+          if (tripDetailSection.nextSibling) {
+            tripDetailSection.parentNode.insertBefore(
+              screenshotPreviewView,
+              tripDetailSection.nextSibling
+            );
+          } else {
+            tripDetailSection.parentNode.appendChild(screenshotPreviewView);
+          }
+        }
+      }
+    }
+
+    // Show category buttons back
+    const homeViewTrip = document.getElementById("home-view-trip");
+    const categoryActionsViewTrip = document.getElementById(
+      "category-actions-view-trip"
+    );
+
+    // Check if we're in trip detail view
+    const isInTripDetail =
+      tripDetailView && !tripDetailView.classList.contains("hidden");
+
+    if (isInTripDetail) {
+      // Show category buttons in trip detail view
+      if (homeViewTrip) homeViewTrip.classList.remove("hidden");
+      if (categoryActionsViewTrip)
+        categoryActionsViewTrip.classList.add("hidden");
+    } else {
+      // Go back to dashboard
+      await showDashboardView();
+    }
   });
 
   // Manual form handlers
@@ -2966,7 +5314,26 @@ function attachEventListeners() {
   if (profileSection) {
     profileSection.addEventListener("click", () => {
       if (profileModal) {
-        profileModal.classList.add("active");
+        profileModal.classList.remove("hidden");
+        // Load current user data into modal
+        getAuth().then((auth) => {
+          if (auth) {
+            const modalNameEl = document.getElementById("profile-modal-name");
+            const modalEmailEl = document.getElementById("profile-modal-email");
+            const modalPictureEl = document.getElementById(
+              "profile-modal-picture"
+            );
+            if (modalNameEl)
+              modalNameEl.textContent = auth.name || auth.username || "";
+            if (modalEmailEl) modalEmailEl.textContent = auth.email || "";
+            if (modalPictureEl) {
+              const initials = (auth.name || auth.username || "U")
+                .substring(0, 2)
+                .toUpperCase();
+              modalPictureEl.textContent = initials;
+            }
+          }
+        });
       }
     });
   }
@@ -2974,7 +5341,14 @@ function attachEventListeners() {
   if (profileModalClose) {
     profileModalClose.addEventListener("click", () => {
       if (profileModal) {
-        profileModal.classList.remove("active");
+        profileModal.classList.add("hidden");
+        // Reset to display view
+        const profileDisplayView = document.getElementById(
+          "profile-display-view"
+        );
+        const profileEditView = document.getElementById("profile-edit-view");
+        if (profileDisplayView) profileDisplayView.classList.remove("hidden");
+        if (profileEditView) profileEditView.classList.add("hidden");
       }
     });
   }
