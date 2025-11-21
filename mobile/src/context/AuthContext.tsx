@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authApi } from '../api/authApi';
 import { userApi } from '../api/userApi';
-import { USE_MOCK_DATA } from '../config/useMockData';
+import { USE_MOCK_DATA, SKIP_AUTH } from '../config/useMockData';
 import { mockUser } from '../mock/mockData';
 import { errorLogger } from '../utils/errorLogger';
 import type { User, LoginRequest, SignUpRequest } from '../api/types';
@@ -40,8 +40,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     try {
       errorLogger.info('AuthContext initializing');
-      if (USE_MOCK_DATA) {
-        // Auto-login with mock user when using mock data
+      if (USE_MOCK_DATA && SKIP_AUTH) {
+        // Auto-login with mock user when using mock data AND skip auth is enabled
         errorLogger.info('Auto-logging in with mock user (authentication disabled)');
         setUser(mockUser);
         setToken('mock-token');

@@ -2,3 +2,7 @@
 // This allows you to demo the frontend without a backend
 export const USE_MOCK_DATA = true;
 
+// Set to true to skip authentication (auto-login with mock data)
+// Set to false to show login/signup screens
+export const SKIP_AUTH = false;
+
