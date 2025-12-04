@@ -15,7 +15,7 @@ export default function AuthLandingScreen() {
     <View style={styles.container}>
       <View style={styles.content}>
         <Ionicons name="airplane" size={80} color={colors.primary} />
-        <Text style={styles.title}>Tripcance</Text>
+        <Text style={styles.title}>TripLedger</Text>
         <Text style={styles.subtitle}>Split expenses with your travel buddies</Text>
       </View>
 

@@ -48,7 +48,7 @@ export default function ProfileScreen() {
     <View style={styles.container}>
       <View style={styles.content}>
         <View style={styles.header}>
-          <Text style={styles.appName}>Tripcance</Text>
+          <Text style={styles.appName}>TripLedger</Text>
         </View>
 
         <View style={styles.profileSection}>

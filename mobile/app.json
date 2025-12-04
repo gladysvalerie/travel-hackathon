@@ -28,8 +28,8 @@
         {
           "photosPermission": "Allow Tripcance to access your photos to scan receipts."
         }
-      ]
+      ],
+      "expo-secure-store"
     ]
   }
 }
-

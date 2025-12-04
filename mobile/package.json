@@ -20,6 +20,7 @@
     "expo": "^54.0.25",
     "expo-file-system": "^19.0.19",
     "expo-image-picker": "~17.0.8",
+    "expo-secure-store": "~15.0.7",
     "openai": "^6.9.1",
     "react": "19.1.0",
     "react-native": "0.81.5",

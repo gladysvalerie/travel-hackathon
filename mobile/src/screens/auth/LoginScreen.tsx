@@ -51,7 +51,7 @@ export default function LoginScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.content}>
           <Text style={styles.title}>Log in</Text>
-          <Text style={styles.subtitle}>Welcome back to Tripcance</Text>
+          <Text style={styles.subtitle}>Welcome back to TripLedger</Text>
 
           <View style={styles.form}>
             <Text style={styles.label}>Username or Email</Text>

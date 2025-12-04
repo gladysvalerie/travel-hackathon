@@ -53,7 +53,7 @@ export default function SignUpScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.content}>
           <Text style={styles.title}>Sign up</Text>
-          <Text style={styles.subtitle}>Create your Tripcance account</Text>
+          <Text style={styles.subtitle}>Create your TripLedger account</Text>
 
           <View style={styles.form}>
             <Text style={styles.label}>Username</Text>

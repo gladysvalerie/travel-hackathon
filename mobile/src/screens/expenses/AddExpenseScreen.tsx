@@ -359,8 +359,8 @@ export default function AddExpenseScreen() {
                 {splitMode === 'custom' && (
                   <TextInput
                     style={styles.amountInput}
-                    placeholder="0.00"
-                    value={participant.amount > 0 ? participant.amount.toFixed(2) : ''}
+                    placeholder="0"
+                    value={participant.amount > 0 ? participant.amount.toString() : ''}
                     onChangeText={(value) => updateParticipantAmount(participant.userId, value)}
                     keyboardType="decimal-pad"
                   />

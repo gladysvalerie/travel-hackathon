@@ -10,7 +10,6 @@ export async function createExpense(req, res) {
         const expense = await expenseService.createExpense(
             req.user.userId, 
             tripId,
-            name,
             description,
             amount,
             type,
