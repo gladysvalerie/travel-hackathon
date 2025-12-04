@@ -1,138 +1,204 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { authApi } from '../api/authApi';
-import { userApi } from '../api/userApi';
-import { USE_MOCK_DATA, SKIP_AUTH } from '../config/useMockData';
-import { mockUser } from '../mock/mockData';
-import { errorLogger } from '../utils/errorLogger';
-import type { User, LoginRequest, SignUpRequest } from '../api/types';
+import React, {
+    createContext,
+    useContext,
+    useState,
+    useEffect,
+    ReactNode,
+} from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { authApi } from "../api/authApi";
+import { userApi } from "../api/userApi";
+import { USE_MOCK_DATA, SKIP_AUTH } from "../config/useMockData";
+import { mockUser } from "../mock/mockData";
+import type { User, LoginRequest, SignUpRequest } from "../api/types";
 
 interface AuthContextType {
-  user: User | null;
-  token: string | null;
-  isLoading: boolean;
-  isAuthenticated: boolean;
-  login: (data: LoginRequest) => Promise<void>;
-  signup: (data: SignUpRequest) => Promise<void>;
-  logout: () => Promise<void>;
-  refreshUser: () => Promise<void>;
+    user: User | null;
+    token: string | null;
+    isLoading: boolean;
+    isAuthenticated: boolean;
+    login: (data: LoginRequest) => Promise<void>;
+    signup: (data: SignUpRequest) => Promise<void>;
+    logout: () => Promise<void>;
+    refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within AuthProvider');
-  }
-  return context;
+    const context = useContext(AuthContext);
+    if (!context) {
+        throw new Error("useAuth must be used within AuthProvider");
+    }
+    return context;
 };
 
 interface AuthProviderProps {
-  children: ReactNode;
+    children: ReactNode;
 }
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+    const [user, setUser] = useState<User | null>(null);
+    const [token, setToken] = useState<string | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    try {
-      errorLogger.info('AuthContext initializing');
-      if (USE_MOCK_DATA && SKIP_AUTH) {
-        // Auto-login with mock user when using mock data AND skip auth is enabled
-        errorLogger.info('Auto-logging in with mock user (authentication disabled)');
-        setUser(mockUser);
-        setToken('mock-token');
-        setIsLoading(false);
-        errorLogger.info('AuthContext initialized with mock user', {
-          userId: mockUser.id,
-          username: mockUser.username,
-        });
-      } else {
-        loadStoredAuth();
-      }
-    } catch (error: any) {
-      errorLogger.error('AuthContext initialization error', error, {
-        component: 'AuthContext',
-      });
-      setIsLoading(false);
-    }
-  }, []);
+    useEffect(() => {
+        try {
+            if (USE_MOCK_DATA && SKIP_AUTH) {
+                // Auto-login with mock user when using mock data AND skip auth is enabled
+                setUser(mockUser);
+                setToken("mock-token");
+                setIsLoading(false);
+            } else {
+                loadStoredAuth();
+            }
+        } catch (error: any) {
+            console.error("[AUTH ERROR] Initialization failed:", error);
+            setIsLoading(false);
+        }
+    }, []);
 
-  const loadStoredAuth = async () => {
-    try {
-      const storedToken = await AsyncStorage.getItem('auth_token');
-      const storedUser = await AsyncStorage.getItem('user');
-      
-      if (storedToken && storedUser) {
-        setToken(storedToken);
-        setUser(JSON.parse(storedUser));
-      }
-    } catch (error) {
-      console.error('Error loading stored auth:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    const loadStoredAuth = async () => {
+        try {
+            const storedToken = await AsyncStorage.getItem("auth_token");
+            const storedUser = await AsyncStorage.getItem("user");
 
-  const login = async (data: LoginRequest) => {
-    try {
-      const response = await authApi.login(data);
-      await AsyncStorage.setItem('auth_token', response.token);
-      await AsyncStorage.setItem('user', JSON.stringify(response.user));
-      setToken(response.token);
-      setUser(response.user);
-    } catch (error: any) {
-      throw new Error(error.response?.data?.error || error.message || 'Login failed');
-    }
-  };
+            if (storedToken && storedUser) {
+                console.log("[AUTH] Found stored token, restoring session");
+                setToken(storedToken);
+                setUser(JSON.parse(storedUser));
+            } else {
+                console.log("[AUTH] No stored session found");
+            }
+        } catch (error) {
+            console.error("[AUTH ERROR] Failed to load stored auth:", error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
-  const signup = async (data: SignUpRequest) => {
-    try {
-      const response = await authApi.signup(data);
-      await AsyncStorage.setItem('auth_token', response.token);
-      await AsyncStorage.setItem('user', JSON.stringify(response.user));
-      setToken(response.token);
-      setUser(response.user);
-    } catch (error: any) {
-      throw new Error(error.response?.data?.error || error.message || 'Signup failed');
-    }
-  };
+    const login = async (data: LoginRequest) => {
+        try {
+            console.log(
+                "[AUTH] Attempting login with identifier:",
+                data.identifier
+            );
+            const response = await authApi.login(data);
+            console.log("[AUTH] Login successful!");
+            console.log(
+                "[AUTH] User:",
+                response.user.username,
+                "| ID:",
+                response.user.id
+            );
+            console.log(
+                "[AUTH] Token received:",
+                response.token.substring(0, 20) + "..."
+            );
 
-  const logout = async () => {
-    try {
-      await AsyncStorage.removeItem('auth_token');
-      await AsyncStorage.removeItem('user');
-      setToken(null);
-      setUser(null);
-    } catch (error) {
-      console.error('Error logging out:', error);
-    }
-  };
+            await AsyncStorage.setItem("auth_token", response.token);
+            await AsyncStorage.setItem("user", JSON.stringify(response.user));
+            setToken(response.token);
+            setUser(response.user);
 
-  const refreshUser = async () => {
-    try {
-      const updatedUser = await userApi.getCurrentUser();
-      await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
-      setUser(updatedUser);
-    } catch (error) {
-      console.error('Error refreshing user:', error);
-    }
-  };
+            console.log("[AUTH] Token and user saved to storage");
+        } catch (error: any) {
+            const errorMessage =
+                error.response?.data?.error || error.message || "Login failed";
+            console.error("[AUTH ERROR] Login failed:", errorMessage);
+            if (error.response) {
+                console.error(
+                    "[AUTH ERROR] Response status:",
+                    error.response.status
+                );
+                console.error(
+                    "[AUTH ERROR] Response data:",
+                    error.response.data
+                );
+            }
+            throw new Error(errorMessage);
+        }
+    };
 
-  const value: AuthContextType = {
-    user,
-    token,
-    isLoading,
-    isAuthenticated: !!token && !!user,
-    login,
-    signup,
-    logout,
-    refreshUser,
-  };
+    const signup = async (data: SignUpRequest) => {
+        try {
+            console.log(
+                "[AUTH] Attempting signup for:",
+                data.username,
+                data.email
+            );
+            const response = await authApi.signup(data);
+            console.log("[AUTH] Signup successful!");
+            console.log(
+                "[AUTH] User:",
+                response.user.username,
+                "| ID:",
+                response.user.id
+            );
+            console.log(
+                "[AUTH] Token received:",
+                response.token.substring(0, 20) + "..."
+            );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+            await AsyncStorage.setItem("auth_token", response.token);
+            await AsyncStorage.setItem("user", JSON.stringify(response.user));
+            setToken(response.token);
+            setUser(response.user);
+
+            console.log("[AUTH] Token and user saved to storage");
+        } catch (error: any) {
+            const errorMessage =
+                error.response?.data?.error || error.message || "Signup failed";
+            console.error("[AUTH ERROR] Signup failed:", errorMessage);
+            if (error.response) {
+                console.error(
+                    "[AUTH ERROR] Response status:",
+                    error.response.status
+                );
+                console.error(
+                    "[AUTH ERROR] Response data:",
+                    error.response.data
+                );
+            }
+            throw new Error(errorMessage);
+        }
+    };
+
+    const logout = async () => {
+        try {
+            console.log("[AUTH] Logging out...");
+            await AsyncStorage.removeItem("auth_token");
+            await AsyncStorage.removeItem("user");
+            setToken(null);
+            setUser(null);
+            console.log("[AUTH] Logout successful");
+        } catch (error) {
+            console.error("[AUTH ERROR] Logout failed:", error);
+        }
+    };
+
+    const refreshUser = async () => {
+        try {
+            const updatedUser = await userApi.getCurrentUser();
+            await AsyncStorage.setItem("user", JSON.stringify(updatedUser));
+            setUser(updatedUser);
+        } catch (error) {
+            console.error("[AUTH ERROR] Failed to refresh user:", error);
+        }
+    };
+
+    const value: AuthContextType = {
+        user,
+        token,
+        isLoading,
+        isAuthenticated: !!token && !!user,
+        login,
+        signup,
+        logout,
+        refreshUser,
+    };
+
+    return (
+        <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+    );
 };
-
