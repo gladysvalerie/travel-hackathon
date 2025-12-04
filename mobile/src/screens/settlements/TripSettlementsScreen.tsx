@@ -1,8 +1,17 @@
-import React from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator } from 'react-native';
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  ActivityIndicator,
+  TouchableOpacity,
+  Alert,
+} from 'react-native';
 import { useRoute, RouteProp } from '@react-navigation/native';
-import { useSettlement } from '../../hooks/useSettlement';
+import { useSettlement, useSettleTransaction } from '../../hooks/useSettlement';
 import { useTrip } from '../../hooks/useTrips';
+import { useAuth } from '../../context/AuthContext';
 import { colors } from '../../theme/colors';
 
 type TripSettlementsScreenRouteProp = RouteProp<{ params: { tripId: string } }>;
@@ -12,6 +21,8 @@ export default function TripSettlementsScreen() {
   const tripId = route.params?.tripId || '';
   const { data: settlement, isLoading } = useSettlement(tripId);
   const { data: trip } = useTrip(tripId);
+  const { user } = useAuth();
+  const settleTransaction = useSettleTransaction(tripId);
 
   if (isLoading) {
     return (
@@ -25,6 +36,38 @@ export default function TripSettlementsScreen() {
   const membersMap = new Map(
     trip?.members?.map((m) => [m.userId, m.user?.username || 'Unknown']) || []
   );
+
+  const handleSettle = (transaction: { from: string; to: string; amount: number }) => {
+    const fromName = membersMap.get(transaction.from) || 'Unknown';
+    const toName = membersMap.get(transaction.to) || 'Unknown';
+
+    Alert.alert(
+      'Settle Transaction',
+      `Mark this transaction as settled?\n\n${fromName} → ${toName}\n$${transaction.amount.toFixed(2)}`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Settle',
+          style: 'default',
+          onPress: async () => {
+            try {
+              await settleTransaction.mutateAsync({
+                fromUserId: transaction.from,
+                toUserId: transaction.to,
+                amount: transaction.amount,
+              });
+              Alert.alert('Success', 'Transaction marked as settled');
+            } catch (error: any) {
+              Alert.alert('Error', error.message || 'Failed to settle transaction');
+            }
+          },
+        },
+      ]
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -41,6 +84,8 @@ export default function TripSettlementsScreen() {
         renderItem={({ item }) => {
           const fromName = membersMap.get(item.from) || 'Unknown';
           const toName = membersMap.get(item.to) || 'Unknown';
+          const isCurrentUserInvolved = item.from === user?.id || item.to === user?.id;
+          const isSettling = settleTransaction.isPending;
 
           return (
             <View style={styles.transactionCard}>
@@ -52,6 +97,20 @@ export default function TripSettlementsScreen() {
                 </Text>
                 <Text style={styles.transactionAmount}>${item.amount.toFixed(2)}</Text>
               </View>
+              {isCurrentUserInvolved && (
+                <TouchableOpacity
+                  style={[styles.settleButton, isSettling && styles.settleButtonDisabled]}
+                  onPress={() => handleSettle(item)}
+                  disabled={isSettling}
+                  activeOpacity={0.8}
+                >
+                  {isSettling ? (
+                    <ActivityIndicator size="small" color={colors.surface} />
+                  ) : (
+                    <Text style={styles.settleButtonText}>Mark as Settled</Text>
+                  )}
+                </TouchableOpacity>
+              )}
             </View>
           );
         }}
@@ -123,6 +182,22 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: colors.primary,
+  },
+  settleButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginTop: 12,
+    alignItems: 'center',
+  },
+  settleButtonDisabled: {
+    opacity: 0.6,
+  },
+  settleButtonText: {
+    color: colors.surface,
+    fontSize: 14,
+    fontWeight: '600',
   },
   emptyContainer: {
     paddingVertical: 64,
