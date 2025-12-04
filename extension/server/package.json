@@ -1,0 +1,24 @@
+{
+  "name": "tripledger-backend",
+  "version": "1.0.0",
+  "description": "Backend server for TripLedger Chrome extension - OpenAI Vision API integration",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node --no-deprecation index.js",
+    "dev": "node --watch --no-deprecation index.js"
+  },
+  "keywords": [
+    "openai",
+    "vision",
+    "chrome-extension"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "openai": "^4.20.0"
+  }
+}
