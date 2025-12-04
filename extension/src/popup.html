@@ -1661,6 +1661,53 @@
         </div>
       </form>
 
+      <!-- Split Type Section -->
+      <div id="split-type-section" class="split-section">
+        <label class="split-label">Split expense:</label>
+
+        <div class="split-options">
+          <label class="split-option-label">
+            <input type="radio" name="splitType" value="equal" checked />
+            <span>Equal among all trip members</span>
+          </label>
+
+          <label class="split-option-label">
+            <input type="radio" name="splitType" value="equal_selected" />
+            <span>Equal among selected members</span>
+          </label>
+
+          <label class="split-option-label">
+            <input type="radio" name="splitType" value="custom" />
+            <span>Custom per member</span>
+          </label>
+        </div>
+
+        <!-- Equal: all members with calculated amounts (no checkboxes) -->
+        <div id="split-equal" class="split-detail hidden">
+          <p class="split-help">Expense will be split equally among all trip members.</p>
+          <div id="split-equal-rows" class="split-members-list"></div>
+        </div>
+
+        <!-- Equal selected: members with checkboxes and calculated amounts -->
+        <div id="split-equal-selected" class="split-detail hidden">
+          <p class="split-help">Choose which members will share this expense equally.</p>
+          <div id="split-equal-selected-rows" class="split-members-list"></div>
+        </div>
+
+        <!-- Custom: members with checkboxes and custom amount inputs -->
+        <div id="split-custom" class="split-detail hidden">
+          <p class="split-help">
+            Set how much each member will pay (must sum to the total amount).
+          </p>
+          <div id="split-custom-rows" class="split-members-list"></div>
+          <div class="split-summary">
+            <span>Total: <span id="split-total-amount">0</span></span>
+            <span>Sum of shares: <span id="split-sum-amount">0</span></span>
+          </div>
+          <div id="split-error" class="error-message hidden"></div>
+        </div>
+      </div>
+
       <!-- Fixed Form Actions at Bottom -->
       <div class="form-actions-fixed">
         <button type="button" id="btn-save-booking" class="btn btn-primary">

@@ -156,6 +156,8 @@ let editingBookingId = null;
 
 // Current trip data
 let currentTripData = null;
+let currentTripMembers = []; // Array of { username, name, userId }
+let currentSplitType = "equal"; // Current split type: "equal" | "equal_selected" | "custom"
 
 /**
  * Update file preview display
@@ -1017,6 +1019,13 @@ async function showTripDetailView(tripId) {
       trip.tripDate = tripDateData[`trip_${tripId}_date`];
     }
 
+    // Store current trip members for split functionality
+    currentTripMembers = (trip.members || []).map((m) => ({
+      username: m.user?.username || m.username,
+      name: m.user?.name || m.user?.username || m.name,
+      userId: m.user?.id || m.userId,
+    }));
+
     // Update trip name display
     tripNameEl = document.getElementById("trip-detail-name");
     if (tripNameEl) {
@@ -1197,6 +1206,364 @@ function loadTripMembers(members, auth) {
 }
 
 // loadTripMembers function is defined above with (members, auth) parameters
+
+/**
+ * Render equal split (all members, no checkboxes, disabled inputs)
+ */
+function renderEqualMembers(totalAmount) {
+  const container = document.getElementById("split-equal-rows");
+  if (!container) return;
+
+  container.innerHTML = "";
+
+  if (currentTripMembers.length === 0) {
+    container.innerHTML = '<div class="empty-state">No members available</div>';
+    return;
+  }
+
+  const shareAmount = totalAmount / currentTripMembers.length;
+
+  currentTripMembers.forEach((member) => {
+    const row = document.createElement("div");
+    row.className = "split-member-row";
+
+    // No checkbox for equal (all members included)
+
+    // Member name (center)
+    const nameSpan = document.createElement("span");
+    nameSpan.className = "split-member-name";
+    nameSpan.textContent = member.name || member.username;
+
+    // Amount input (right, disabled)
+    const input = document.createElement("input");
+    input.type = "number";
+    input.className = "split-member-input";
+    input.value = shareAmount.toFixed(2);
+    input.disabled = true;
+    input.readOnly = true;
+
+    row.appendChild(nameSpan);
+    row.appendChild(input);
+    container.appendChild(row);
+  });
+}
+
+/**
+ * Render equal selected members (with checkboxes and calculated amounts)
+ */
+function renderEqualSelectedMembers(totalAmount) {
+  const container = document.getElementById("split-equal-selected-rows");
+  if (!container) return;
+
+  container.innerHTML = "";
+
+  if (currentTripMembers.length === 0) {
+    container.innerHTML = '<div class="empty-state">No members available</div>';
+    return;
+  }
+
+  // Calculate initial share (all selected by default)
+  const updateAmounts = () => {
+    const checked = Array.from(
+      container.querySelectorAll('input[type="checkbox"]:checked')
+    );
+    const selectedCount = checked.length;
+    const shareAmount = selectedCount > 0 ? totalAmount / selectedCount : 0;
+
+    // Update all input values
+    container.querySelectorAll(".split-member-input").forEach((input) => {
+      const checkbox = input
+        .closest(".split-member-row")
+        .querySelector('input[type="checkbox"]');
+      if (checkbox && checkbox.checked) {
+        input.value = shareAmount.toFixed(2);
+      } else {
+        input.value = "0.00";
+      }
+    });
+  };
+
+  currentTripMembers.forEach((member) => {
+    const row = document.createElement("div");
+    row.className = "split-member-row";
+
+    // Checkbox (left)
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.className = "split-member-checkbox";
+    checkbox.value = member.username;
+    checkbox.checked = true; // Default to checked
+    checkbox.addEventListener("change", updateAmounts);
+
+    // Member name (center)
+    const nameSpan = document.createElement("span");
+    nameSpan.className = "split-member-name";
+    nameSpan.textContent = member.name || member.username;
+
+    // Amount input (right, disabled)
+    const input = document.createElement("input");
+    input.type = "number";
+    input.className = "split-member-input";
+    input.value = (totalAmount / currentTripMembers.length).toFixed(2);
+    input.disabled = true;
+    input.readOnly = true;
+
+    row.appendChild(checkbox);
+    row.appendChild(nameSpan);
+    row.appendChild(input);
+    container.appendChild(row);
+  });
+
+  // Initial calculation
+  updateAmounts();
+}
+
+/**
+ * Render custom split rows (with checkboxes and editable inputs)
+ */
+function renderCustomSplitRows(totalAmount) {
+  const container = document.getElementById("split-custom-rows");
+  if (!container) return;
+
+  container.innerHTML = "";
+
+  if (currentTripMembers.length === 0) {
+    container.innerHTML = '<div class="empty-state">No members available</div>';
+    return;
+  }
+
+  // Calculate equal share as default
+  const equalShare = totalAmount / currentTripMembers.length;
+
+  currentTripMembers.forEach((member) => {
+    const row = document.createElement("div");
+    row.className = "split-member-row";
+
+    // Checkbox (left)
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.className = "split-member-checkbox";
+    checkbox.value = member.username;
+    checkbox.checked = true; // Default to checked
+    checkbox.addEventListener("change", () => {
+      const input = row.querySelector(".split-member-input");
+      if (checkbox.checked) {
+        // If unchecked, set to 0; if checked, restore previous value or equal share
+        if (!input.value || parseFloat(input.value) === 0) {
+          input.value = equalShare.toFixed(2);
+        }
+      } else {
+        input.value = "0.00";
+      }
+      updateCustomSplitSum();
+    });
+
+    // Member name (center)
+    const nameSpan = document.createElement("span");
+    nameSpan.className = "split-member-name";
+    nameSpan.textContent = member.name || member.username;
+
+    // Amount input (right, enabled)
+    const input = document.createElement("input");
+    input.type = "number";
+    input.min = "0";
+    input.step = "0.01";
+    input.dataset.username = member.username;
+    input.className = "split-member-input";
+    input.value = equalShare.toFixed(2);
+    input.placeholder = "0.00";
+
+    // Attach listener to recalc sum
+    input.addEventListener("input", updateCustomSplitSum);
+
+    row.appendChild(checkbox);
+    row.appendChild(nameSpan);
+    row.appendChild(input);
+    container.appendChild(row);
+  });
+
+  // Update total display
+  const totalSpan = document.getElementById("split-total-amount");
+  if (totalSpan) {
+    totalSpan.dataset.totalAmount = totalAmount;
+    totalSpan.textContent = totalAmount.toFixed(2);
+  }
+
+  updateCustomSplitSum();
+}
+
+/**
+ * Update custom split sum and validate
+ */
+function updateCustomSplitSum() {
+  const totalSpan = document.getElementById("split-total-amount");
+  const sumSpan = document.getElementById("split-sum-amount");
+  const errorEl = document.getElementById("split-error");
+
+  if (!totalSpan || !sumSpan) return;
+
+  const total = parseFloat(totalSpan.dataset.totalAmount || "0");
+  let sum = 0;
+
+  document
+    .querySelectorAll("#split-custom-rows input.split-member-input")
+    .forEach((input) => {
+      // Only count if checkbox is checked
+      const row = input.closest(".split-member-row");
+      const checkbox = row?.querySelector('input[type="checkbox"]');
+      if (checkbox && checkbox.checked) {
+        const v = parseFloat(input.value);
+        if (!isNaN(v) && v > 0) {
+          sum += v;
+        }
+      }
+    });
+
+  sumSpan.textContent = sum.toFixed(2);
+
+  const EPS = 0.01;
+  if (Math.abs(sum - total) > EPS && total > 0) {
+    if (errorEl) {
+      errorEl.textContent = "Split amounts must sum exactly to the total.";
+      errorEl.classList.remove("hidden");
+    }
+    return false;
+  } else {
+    if (errorEl) {
+      errorEl.classList.add("hidden");
+    }
+    return true;
+  }
+}
+
+/**
+ * Initialize split type controls
+ */
+function initSplitTypeControls() {
+  const radios = document.querySelectorAll('input[name="splitType"]');
+  const equalEl = document.getElementById("split-equal");
+  const equalSelectedEl = document.getElementById("split-equal-selected");
+  const customEl = document.getElementById("split-custom");
+
+  if (!radios.length) return;
+
+  radios.forEach((radio) => {
+    radio.addEventListener("change", () => {
+      currentSplitType = radio.value;
+      const amount = getCurrentAmountFromForm();
+
+      if (currentSplitType === "equal") {
+        if (equalEl) equalEl.classList.remove("hidden");
+        if (equalSelectedEl) equalSelectedEl.classList.add("hidden");
+        if (customEl) customEl.classList.add("hidden");
+        if (amount > 0) {
+          renderEqualMembers(amount);
+        }
+      } else if (currentSplitType === "equal_selected") {
+        if (equalEl) equalEl.classList.add("hidden");
+        if (equalSelectedEl) equalSelectedEl.classList.remove("hidden");
+        if (customEl) customEl.classList.add("hidden");
+        if (amount > 0) {
+          renderEqualSelectedMembers(amount);
+        }
+      } else if (currentSplitType === "custom") {
+        if (equalEl) equalEl.classList.add("hidden");
+        if (equalSelectedEl) equalSelectedEl.classList.add("hidden");
+        if (customEl) customEl.classList.remove("hidden");
+        if (amount > 0) {
+          renderCustomSplitRows(amount);
+        }
+      }
+    });
+  });
+}
+
+/**
+ * Reset split type controls to default
+ */
+function resetSplitTypeControls() {
+  currentSplitType = "equal";
+
+  // Reset radio buttons
+  const equalRadio = document.querySelector('input[name="splitType"][value="equal"]');
+  if (equalRadio) equalRadio.checked = true;
+
+  // Hide detail sections
+  const equalEl = document.getElementById("split-equal");
+  const equalSelectedEl = document.getElementById("split-equal-selected");
+  const customEl = document.getElementById("split-custom");
+  if (equalEl) equalEl.classList.add("hidden");
+  if (equalSelectedEl) equalSelectedEl.classList.add("hidden");
+  if (customEl) customEl.classList.add("hidden");
+
+  // Clear error
+  const errorEl = document.getElementById("split-error");
+  if (errorEl) errorEl.classList.add("hidden");
+}
+
+/**
+ * Attach listeners to amount fields to update split displays
+ */
+function attachAmountChangeListeners() {
+  const amountFields = [
+    "field-price",
+    "field-price-hotel",
+    "field-price-restaurant",
+    "field-price-attraction",
+  ];
+
+  amountFields.forEach((fieldId) => {
+    const field = document.getElementById(fieldId);
+    if (field) {
+      // Remove existing listeners by cloning
+      const newField = field.cloneNode(true);
+      field.parentNode.replaceChild(newField, field);
+
+      // Add new listener
+      newField.addEventListener("input", () => {
+        const amount = getCurrentAmountFromForm();
+        if (amount > 0) {
+          if (currentSplitType === "equal") {
+            renderEqualMembers(amount);
+          } else if (currentSplitType === "equal_selected") {
+            renderEqualSelectedMembers(amount);
+          } else if (currentSplitType === "custom") {
+            const totalSpan = document.getElementById("split-total-amount");
+            if (totalSpan) {
+              totalSpan.dataset.totalAmount = amount;
+              totalSpan.textContent = amount.toFixed(2);
+            }
+            // Re-render to update default values
+            renderCustomSplitRows(amount);
+          }
+        }
+      });
+    }
+  });
+}
+
+/**
+ * Get current amount from form based on category type
+ */
+function getCurrentAmountFromForm() {
+  if (!currentCategoryType) return 0;
+
+  let amountInput;
+  if (currentCategoryType === "flight") {
+    amountInput = document.getElementById("field-price");
+  } else if (currentCategoryType === "hotel") {
+    amountInput = document.getElementById("field-price-hotel");
+  } else if (currentCategoryType === "restaurant") {
+    amountInput = document.getElementById("field-price-restaurant");
+  } else if (currentCategoryType === "attraction") {
+    amountInput = document.getElementById("field-price-attraction");
+  }
+
+  if (amountInput && amountInput.value) {
+    return parseFloat(amountInput.value) || 0;
+  }
+  return 0;
+}
 
 /**
  * Helper to escape HTML
@@ -2188,6 +2555,13 @@ function showManualFormView(categoryType, { fromScreenshot = false }) {
     renderDishesList();
   }
 
+  // Initialize split type controls
+  resetSplitTypeControls();
+  initSplitTypeControls();
+
+  // Attach listeners to price fields to update custom split when amount changes
+  attachAmountChangeListeners();
+
   // Save view state (we're in manual form, possibly with screenshot)
   saveViewState();
 }
@@ -2899,7 +3273,7 @@ async function handleFileChange(event) {
     }
   } catch (error) {
     console.error("File processing error:", error);
-    alert("Failed to process file. Please try again.");
+    // File may have been processed successfully despite error, so don't show alert
   } finally {
     // Reset file input
     event.target.value = "";
@@ -3309,19 +3683,76 @@ async function handleSaveBooking() {
         throw new Error("Expense amount must be greater than 0");
       }
 
-      // Build payload matching the API exactly
-      // Backend requires type field: "equal", "equal_selected", or "custom"
-      // Using "equal" to split equally among all trip members
-      const expensePayload = {
+      // Build payload based on split type
+      let expensePayload = {
         description: expenseDescription,
         amount: expenseAmount,
-        type: "equal" // Split equally among all trip members
       };
 
-      console.log("=== CREATING EXPENSE ===");
-      console.log("Location: src/popup.js:3265 (handleSaveBooking function)");
-      console.log("API Endpoint: POST /expense/" + tripId);
-      console.log("Payload:", JSON.stringify(expensePayload, null, 2));
+      // Build payload based on currentSplitType
+      if (currentSplitType === "equal") {
+        expensePayload.type = "equal";
+      } else if (currentSplitType === "equal_selected") {
+        const checked = Array.from(
+          document.querySelectorAll(
+            '#split-equal-selected-rows input[type="checkbox"]:checked'
+          )
+        );
+        const memberUsernames = checked.map((c) => c.value);
+
+        if (memberUsernames.length === 0) {
+          throw new Error(
+            "Please select at least one member for the split."
+          );
+        }
+
+        expensePayload.type = "equal_selected";
+        expensePayload.members = memberUsernames;
+      } else if (currentSplitType === "custom") {
+        // Validate custom splits sum
+        const valid = updateCustomSplitSum();
+        if (!valid) {
+          throw new Error(
+            "Custom splits must sum exactly to the total amount."
+          );
+        }
+
+        const inputs = document.querySelectorAll(
+          "#split-custom-rows input.split-member-input"
+        );
+        const splits = [];
+
+        inputs.forEach((input) => {
+          // Only include if checkbox is checked
+          const row = input.closest(".split-member-row");
+          const checkbox = row?.querySelector('input[type="checkbox"]');
+          if (checkbox && checkbox.checked) {
+            const username = input.dataset.username;
+            const value = parseFloat(input.value);
+            if (!isNaN(value) && value > 0) {
+              splits.push({ username, shareAmount: value });
+            }
+          }
+        });
+
+        if (splits.length === 0) {
+          throw new Error(
+            "Please set at least one share amount for custom split."
+          );
+        }
+
+        expensePayload.type = "custom";
+        expensePayload.splits = splits;
+      } else {
+        // Default to equal if split type is not set
+        expensePayload.type = "equal";
+      }
+
+      console.log("[TripLedger] Creating expense", {
+        tripId,
+        type: expensePayload.type || "equal (implicit)",
+        payload: expensePayload,
+      });
 
       // Show loading overlay
       showLoadingOverlay("Saving expense...");

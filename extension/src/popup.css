@@ -853,6 +853,146 @@ button:active {
   gap: 14px;
 }
 
+/* Split Type Section */
+.split-section {
+  margin: 20px 0;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.split-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 12px;
+}
+
+.split-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.split-option-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #475569;
+  cursor: pointer;
+  padding: 6px 0;
+}
+
+.split-option-label input[type="radio"] {
+  margin: 0;
+  cursor: pointer;
+}
+
+.split-option-label span {
+  user-select: none;
+}
+
+.split-detail {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.split-help {
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 12px;
+}
+
+/* Consistent split members list layout */
+.split-members-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.split-member-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.split-member-row:last-child {
+  border-bottom: none;
+}
+
+/* Checkbox (left) - only for equal_selected and custom */
+.split-member-checkbox {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  cursor: pointer;
+}
+
+/* Member name (center) */
+.split-member-name {
+  flex: 1;
+  font-size: 13px;
+  color: #475569;
+  font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Amount input (right) */
+.split-member-input {
+  flex: 0 0 100px;
+  padding: 6px 10px;
+  font-size: 13px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+  text-align: right;
+}
+
+.split-member-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.split-member-input:disabled {
+  background: #f8fafc;
+  color: #64748b;
+  cursor: not-allowed;
+  border-color: #e2e8f0;
+}
+
+.split-summary {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #64748b;
+  padding: 8px 0;
+  border-top: 1px solid #e2e8f0;
+  margin-top: 8px;
+}
+
+.split-summary span {
+  font-weight: 500;
+}
+
+#split-error {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #ef4444;
+}
+
 .form-row {
   display: flex;
   gap: 10px;
