@@ -3310,12 +3310,12 @@ async function handleSaveBooking() {
       }
 
       // Build payload matching the API exactly
-      // API Example: { "description": "Lunch", "amount": 200 }
-      // For "equal" type, we omit the type field - backend defaults to "equal"
+      // Backend requires type field: "equal", "equal_selected", or "custom"
+      // Using "equal" to split equally among all trip members
       const expensePayload = {
         description: expenseDescription,
         amount: expenseAmount,
-        // No type field - backend will default to "equal"
+        type: "equal" // Split equally among all trip members
       };
 
       console.log("=== CREATING EXPENSE ===");

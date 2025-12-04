@@ -3,7 +3,7 @@
  * All backend API calls go through here
  */
 
-const BASE_URL = "http://192.168.50.143:5000";
+const BASE_URL = "http://localhost:5000";
 
 /**
  * Helper function to handle API responses
@@ -24,6 +24,26 @@ async function handleResponse(response) {
 }
 
 /**
+ * Helper function to wrap fetch calls and handle network errors
+ */
+async function safeFetch(url, options) {
+  try {
+    const response = await fetch(url, options);
+    return response;
+  } catch (error) {
+    // Handle network errors (Failed to fetch)
+    if (error.message === 'Failed to fetch' || error.name === 'TypeError') {
+      throw new Error(
+        `Cannot connect to backend server at ${BASE_URL}. ` +
+        `Please make sure the backend server is running on port 5000. ` +
+        `Error: ${error.message}`
+      );
+    }
+    throw error;
+  }
+}
+
+/**
  * Helper function to create fetch options with auth token
  */
 function createFetchOptions(token, method = "GET", body = null) {
@@ -39,23 +59,22 @@ function createFetchOptions(token, method = "GET", body = null) {
   }
 
   if (body) {
-    // For expense creation, only normalize type if it's explicitly provided
-    // If type is not provided, don't add it - backend will default to "equal"
-    // This matches the API example: { "description": "Lunch", "amount": 200 }
+    // For expense creation, normalize type if provided
+    // Backend requires type to be one of: "equal", "equal_selected", or "custom"
     if (body.type !== undefined && body.type !== null && body.type !== "") {
       body.type = String(body.type).trim();
-      // If after trimming it's empty, remove it (let backend default)
-      if (body.type === "") {
-        delete body.type;
-      } else if (!["equal", "equal_selected", "custom"].includes(body.type)) {
-        // If invalid type, remove it (let backend default to "equal")
+      // Validate type is one of the supported values
+      if (!["equal", "equal_selected", "custom"].includes(body.type)) {
+        // If invalid type, default to "equal"
         console.warn(
-          `API - Invalid type '${body.type}', removing (backend will default to 'equal')`
+          `API - Invalid type '${body.type}', defaulting to 'equal'`
         );
-        delete body.type;
+        body.type = "equal";
       }
+    } else if (body.description !== undefined && body.amount !== undefined) {
+      // If type is missing but this looks like an expense payload, default to "equal"
+      body.type = "equal";
     }
-    // If type is undefined/null/empty, don't add it - backend will default to "equal"
 
     options.body = JSON.stringify(body);
     console.log("API - Request body:", options.body);
@@ -76,7 +95,7 @@ function createFetchOptions(token, method = "GET", body = null) {
  * @returns {Promise<{token: string, user: {id: string, username: string, email: string, name: string}}>}
  */
 export async function registerUser({ username, name, email, password }) {
-  const response = await fetch(`${BASE_URL}/auth/register`, {
+  const response = await safeFetch(`${BASE_URL}/auth/register`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -109,7 +128,7 @@ export async function registerUser({ username, name, email, password }) {
  * @returns {Promise<{token: string, userId: string, username: string, email: string, name: string}>}
  */
 export async function loginUser({ identifier, password }) {
-  const response = await fetch(`${BASE_URL}/auth/login`, {
+  const response = await safeFetch(`${BASE_URL}/auth/login`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -260,9 +279,15 @@ export async function addTripMember(token, tripId, { username }) {
  * @returns {Promise<Object>} - Created expense object
  */
 export async function createExpense(token, tripId, payload) {
-  const response = await fetch(
+  // Ensure type is set - default to "equal" if not provided
+  const expensePayload = {
+    ...payload,
+    type: payload.type || "equal"
+  };
+  
+  const response = await safeFetch(
     `${BASE_URL}/expense/${tripId}`,
-    createFetchOptions(token, "POST", payload)
+    createFetchOptions(token, "POST", expensePayload)
   );
 
   return handleResponse(response);
