@@ -104,14 +104,14 @@ export default function TripMembersScreen() {
               </View>
               {!isCurrentUser && (
                 <View style={styles.balanceInfo}>
-                  {memberBalance > 0.01 && (
-                    <Text style={styles.balanceText}>
-                      {memberName} owes you ${memberBalance.toFixed(2)}
-                    </Text>
-                  )}
                   {memberBalance < -0.01 && (
                     <Text style={styles.balanceText}>
-                      You owe {memberName} ${Math.abs(memberBalance).toFixed(2)}
+                      {memberName} owes you ${Math.abs(memberBalance).toFixed(2)}
+                    </Text>
+                  )}
+                  {memberBalance > 0.01 && (
+                    <Text style={styles.balanceText}>
+                      You owe {memberName} ${memberBalance.toFixed(2)}
                     </Text>
                   )}
                   {Math.abs(memberBalance) <= 0.01 && (
