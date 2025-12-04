@@ -5,7 +5,7 @@ export async function createExpense(req, res) {
         console.log("BODY:", req.body); // <--- log here
         console.log("TYPE:", req.body.members);
         const tripId = req.params.tripId;
-        const { name, description, amount, type, splits, members } = req.body;
+        const { description, amount, type, splits, members } = req.body;
 
         const expense = await expenseService.createExpense(
             req.user.userId, 
@@ -56,13 +56,16 @@ export async function getExpense(req, res) {
 export async function updateExpense(req, res) {
     try {
         const expenseId = req.params.expenseId;
-        const { description, amount } = req.body;
+        const { description, amount, type, splits, members } = req.body;
 
         const updated = await expenseService.updateExpense(
             req.user.userId,
             expenseId,
             description,
-            amount
+            amount,
+            type,
+            splits,
+            members
         );
 
         return res.json(updated);
