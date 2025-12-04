@@ -97,50 +97,87 @@ export default function AddExpenseScreen() {
 
   const handleScanReceipt = async () => {
     try {
-      const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-      if (!permissionResult.granted) {
-        Alert.alert('Permission Required', 'Camera permission is needed to scan receipts');
+      setIsScanning(true);
+      
+      // Request camera permission
+      const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
+      // Request media library permission
+      const mediaLibraryPermission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (!cameraPermission.granted && !mediaLibraryPermission.granted) {
+        Alert.alert(
+          'Permission Required',
+          'Camera and photo library permissions are needed to scan receipts. Please enable them in your device settings.',
+          [{ text: 'OK' }]
+        );
+        setIsScanning(false);
         return;
       }
 
       // Show action sheet to choose between camera and library
-      Alert.alert(
-        'Scan Receipt',
-        'Choose an option',
-        [
-          {
-            text: 'Camera',
-            onPress: async () => {
+      const options: any[] = [];
+      
+      if (cameraPermission.granted) {
+        options.push({
+          text: 'Camera',
+          onPress: async () => {
+            try {
               const result = await ImagePicker.launchCameraAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
                 allowsEditing: true,
                 quality: 0.8,
               });
               if (!result.canceled && result.assets[0]) {
                 await processReceiptImage(result.assets[0].uri);
+              } else {
+                setIsScanning(false);
               }
-            },
+            } catch (error: any) {
+              console.error('Camera error:', error);
+              Alert.alert('Error', error.message || 'Failed to open camera');
+              setIsScanning(false);
+            }
           },
-          {
-            text: 'Photo Library',
-            onPress: async () => {
+        });
+      }
+      
+      if (mediaLibraryPermission.granted) {
+        options.push({
+          text: 'Photo Library',
+          onPress: async () => {
+            try {
               const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
                 allowsEditing: true,
                 quality: 0.8,
               });
               if (!result.canceled && result.assets[0]) {
                 await processReceiptImage(result.assets[0].uri);
+              } else {
+                setIsScanning(false);
               }
-            },
+            } catch (error: any) {
+              console.error('Photo library error:', error);
+              Alert.alert('Error', error.message || 'Failed to open photo library');
+              setIsScanning(false);
+            }
           },
-          {
-            text: 'Cancel',
-            style: 'cancel',
-          },
-        ]
-      );
+        });
+      }
+      
+      if (options.length === 0) {
+        Alert.alert('Permission Required', 'Please grant camera or photo library permission to scan receipts');
+        setIsScanning(false);
+        return;
+      }
+      
+      options.push({
+        text: 'Cancel',
+        style: 'cancel',
+        onPress: () => setIsScanning(false),
+      });
+      
+      Alert.alert('Scan Receipt', 'Choose an option', options);
     } catch (error: any) {
+      console.error('Scan receipt error:', error);
       Alert.alert('Error', error.message || 'Failed to scan receipt');
       setIsScanning(false);
     }

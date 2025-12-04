@@ -1,4 +1,4 @@
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import OpenAI from 'openai';
 import type { ParsedReceiptData } from '../api/types';
 
@@ -18,14 +18,23 @@ const getOpenAIClient = () => {
  */
 async function imageToBase64(imageUri: string): Promise<string> {
   try {
-    console.log('Reading image file...');
+    console.log('Reading image file from:', imageUri);
+    
+    // Use the legacy API which still has readAsStringAsync
     const base64 = await FileSystem.readAsStringAsync(imageUri, {
       encoding: FileSystem.EncodingType.Base64,
     });
+    
+    console.log('Image converted to base64, length:', base64.length);
     return base64;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error reading image:', error);
-    throw new Error('Failed to read image file');
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      uri: imageUri,
+    });
+    throw new Error(`Failed to read image file: ${error.message || 'Unknown error'}`);
   }
 }
 
