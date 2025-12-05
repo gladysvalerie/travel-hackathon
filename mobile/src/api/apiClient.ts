@@ -1,7 +1,7 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://192.168.50.143:5000';
+const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://172.20.10.4:5000'; // CHANGE
 
 // Log the API base URL on startup
 console.log('[API] Base URL:', BASE_URL);

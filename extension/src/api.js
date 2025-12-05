@@ -3,7 +3,7 @@
  * All backend API calls go through here
  */
 
-const BASE_URL = "http://localhost:5000";
+const BASE_URL = "http://172.20.10.4:5000"; // CHANGE
 
 /**
  * Helper function to handle API responses
