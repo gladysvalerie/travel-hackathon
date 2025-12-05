@@ -1,14 +1,15 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import type { Expense } from '../api/types';
 
 interface ExpenseCardProps {
   expense: Expense;
+  onPress?: () => void;
 }
 
-export const ExpenseCard: React.FC<ExpenseCardProps> = ({ expense }) => {
+export const ExpenseCard: React.FC<ExpenseCardProps> = ({ expense, onPress }) => {
   const date = new Date(expense.createdAt).toLocaleDateString();
   const payerName = expense.payer?.username || 'Unknown';
 
@@ -22,8 +23,8 @@ export const ExpenseCard: React.FC<ExpenseCardProps> = ({ expense }) => {
     return 'receipt';
   };
 
-  return (
-    <View style={styles.card}>
+  const CardContent = (
+    <>
       <View style={styles.header}>
         <Ionicons
           name={getCategoryIcon(expense.description)}
@@ -39,8 +40,18 @@ export const ExpenseCard: React.FC<ExpenseCardProps> = ({ expense }) => {
         </View>
       </View>
       <Text style={styles.date}>{date}</Text>
-    </View>
+    </>
   );
+
+  if (onPress) {
+    return (
+      <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.7}>
+        {CardContent}
+      </TouchableOpacity>
+    );
+  }
+
+  return <View style={styles.card}>{CardContent}</View>;
 };
 
 const styles = StyleSheet.create({

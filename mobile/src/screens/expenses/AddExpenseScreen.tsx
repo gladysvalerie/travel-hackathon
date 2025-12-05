@@ -16,7 +16,8 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useTrip } from '../../hooks/useTrips';
-import { useCreateExpense } from '../../hooks/useTripExpenses';
+import { useCreateExpense, useUpdateExpense } from '../../hooks/useTripExpenses';
+import { useExpense } from '../../hooks/useExpense';
 import { parseReceipt } from '../../services/receiptParser';
 import { SplitModeSelector, SplitMode } from '../../components/SplitModeSelector';
 import { colors } from '../../theme/colors';
@@ -37,9 +38,12 @@ interface ParticipantSplit {
 export default function AddExpenseScreen() {
   const route = useRoute<AddExpenseScreenRouteProp>();
   const navigation = useNavigation<AddExpenseScreenNavigationProp>();
-  const { tripId, initialParsedData } = route.params || { tripId: '' };
+  const { tripId, initialParsedData, expenseId } = route.params || { tripId: '' };
   const { data: trip } = useTrip(tripId);
+  const { data: expense } = useExpense(expenseId || '');
   const createExpense = useCreateExpense();
+  const updateExpense = useUpdateExpense();
+  const isEditMode = !!expenseId;
 
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
@@ -47,9 +51,10 @@ export default function AddExpenseScreen() {
   const [participants, setParticipants] = useState<ParticipantSplit[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
+  const [expenseLoaded, setExpenseLoaded] = useState(false);
 
   useEffect(() => {
-    if (trip?.members) {
+    if (trip?.members && !isEditMode) {
       const initialParticipants: ParticipantSplit[] = trip.members.map((member) => ({
         userId: member.userId,
         username: member.user?.username || 'Unknown',
@@ -59,7 +64,7 @@ export default function AddExpenseScreen() {
       }));
       setParticipants(initialParticipants);
     }
-  }, [trip]);
+  }, [trip, isEditMode]);
 
   useEffect(() => {
     if (initialParsedData) {
@@ -74,11 +79,75 @@ export default function AddExpenseScreen() {
   }, [initialParsedData]);
 
   useEffect(() => {
+    if (expense && isEditMode && trip?.members) {
+      setDescription(expense.description || '');
+      setAmount(expense.amount.toString());
+
+      // Populate participants with existing splits
+      if (expense.splits && expense.splits.length > 0) {
+        const allMemberIds = new Set(trip.members.map(m => m.userId));
+        const splitUserIds = new Set(expense.splits.map(s => s.userId));
+        
+        // Determine split mode
+        const splitAmounts = expense.splits.map(s => s.shareAmount);
+        const firstAmount = splitAmounts[0];
+        const allEqual = splitAmounts.every(amt => Math.abs(amt - firstAmount) < 0.01);
+        const allMembersIncluded = expense.splits.length === trip.members.length && 
+          expense.splits.every(s => allMemberIds.has(s.userId));
+        
+        let detectedMode: SplitMode = 'equal';
+        if (allEqual && allMembersIncluded) {
+          detectedMode = 'equal';
+        } else if (allEqual && !allMembersIncluded) {
+          detectedMode = 'equal_selected';
+        } else {
+          detectedMode = 'custom';
+        }
+        
+        setSplitMode(detectedMode);
+
+        // Create participants map from splits
+        const splitMap = new Map(expense.splits.map(s => [s.userId, s.shareAmount]));
+        
+        const initialParticipants: ParticipantSplit[] = trip.members.map((member) => {
+          const shareAmount = splitMap.get(member.userId) || 0;
+          const isSelected = splitMap.has(member.userId);
+          
+          return {
+            userId: member.userId,
+            username: member.user?.username || 'Unknown',
+            selected: isSelected,
+            amount: shareAmount,
+            parts: 1,
+          };
+        });
+        
+        setParticipants(initialParticipants);
+      } else {
+        // Fallback: initialize with all members if no splits
+        const initialParticipants: ParticipantSplit[] = trip.members.map((member) => ({
+          userId: member.userId,
+          username: member.user?.username || 'Unknown',
+          selected: true,
+          amount: 0,
+          parts: 1,
+        }));
+        setParticipants(initialParticipants);
+      }
+      setExpenseLoaded(true);
+    }
+  }, [expense, isEditMode, trip]);
+
+  useEffect(() => {
     if (!amount) return;
+    
+    // Don't auto-recalculate when initially loading expense data in edit mode
+    if (isEditMode && !expenseLoaded) return;
     
     const total = parseFloat(amount);
     if (isNaN(total) || total <= 0) return;
 
+    // Recalculate when split mode or amount changes (after initial load)
     if (splitMode === 'equal' && participants.length > 0) {
       const share = total / participants.length;
       setParticipants((prev) =>
@@ -93,7 +162,8 @@ export default function AddExpenseScreen() {
         );
       }
     }
-  }, [splitMode, amount]);
+    // For 'custom' mode, don't auto-recalculate - let user set amounts manually
+  }, [splitMode, amount, isEditMode, expenseLoaded]);
 
   const handleScanReceipt = async () => {
     try {
@@ -186,17 +256,26 @@ export default function AddExpenseScreen() {
   const processReceiptImage = async (imageUri: string) => {
     setIsScanning(true);
     try {
-      // Parse receipt locally using Tesseract OCR and OpenAI
+      // Parse receipt locally using OpenAI Vision API
       const parsedData = await parseReceipt(imageUri);
       
-      if (parsedData.merchant) {
-        setDescription(`Receipt at ${parsedData.merchant}`);
+      // Check if receipt has multiple items
+      if (parsedData.items && parsedData.items.length > 1) {
+        // Navigate to ReceiptItemsScreen for item selection
+        navigation.navigate('ReceiptItems', {
+          tripId,
+          receiptData: parsedData,
+        });
+      } else {
+        // Single item or no items - use simple flow
+        if (parsedData.merchant) {
+          setDescription(`Receipt at ${parsedData.merchant}`);
+        }
+        if (parsedData.total) {
+          setAmount(parsedData.total.toString());
+        }
+        Alert.alert('Success', 'Receipt scanned successfully');
       }
-      if (parsedData.total) {
-        setAmount(parsedData.total.toString());
-      }
-      
-      Alert.alert('Success', 'Receipt scanned successfully');
     } catch (error: any) {
       console.error('Receipt parsing error:', error);
       Alert.alert(
@@ -222,47 +301,93 @@ export default function AddExpenseScreen() {
 
     setIsLoading(true);
     try {
-      let payload: any = {
-        description: description.trim(),
-        amount: totalAmount,
-      };
+      if (isEditMode && expenseId) {
+        // Update existing expense with full split information
+        let payload: any = {
+          description: description.trim(),
+          amount: totalAmount,
+        };
 
-      if (splitMode === 'equal') {
-        payload.type = 'equal';
-      } else if (splitMode === 'equal_selected') {
-        const selectedUsernames = participants
-          .filter((p) => p.selected)
-          .map((p) => p.username);
-        if (selectedUsernames.length === 0) {
-          Alert.alert('Error', 'Please select at least one participant');
-          setIsLoading(false);
-          return;
+        if (splitMode === 'equal') {
+          payload.type = 'equal';
+        } else if (splitMode === 'equal_selected') {
+          const selectedUsernames = participants
+            .filter((p) => p.selected)
+            .map((p) => p.username);
+          if (selectedUsernames.length === 0) {
+            Alert.alert('Error', 'Please select at least one participant');
+            setIsLoading(false);
+            return;
+          }
+          payload.type = 'equal_selected';
+          payload.members = selectedUsernames;
+        } else if (splitMode === 'custom') {
+          const splits = participants
+            .filter((p) => p.amount > 0)
+            .map((p) => ({
+              username: p.username,
+              shareAmount: p.amount,
+            }));
+
+          const sum = splits.reduce((acc, s) => acc + s.shareAmount, 0);
+          if (Math.abs(sum - totalAmount) > 0.01) {
+            Alert.alert('Error', `Split amounts must sum to $${totalAmount.toFixed(2)}`);
+            setIsLoading(false);
+            return;
+          }
+
+          payload.type = 'custom';
+          payload.splits = splits;
         }
-        payload.type = 'equal_selected';
-        payload.members = selectedUsernames;
-      } else if (splitMode === 'custom') {
-        const splits = participants
-          .filter((p) => p.amount > 0)
-          .map((p) => ({
-            username: p.username,
-            shareAmount: p.amount,
-          }));
 
-        const sum = splits.reduce((acc, s) => acc + s.shareAmount, 0);
-        if (Math.abs(sum - totalAmount) > 0.01) {
-          Alert.alert('Error', `Split amounts must sum to $${totalAmount.toFixed(2)}`);
-          setIsLoading(false);
-          return;
+        await updateExpense.mutateAsync({
+          expenseId,
+          data: payload,
+        });
+      } else {
+        // Create new expense
+        let payload: any = {
+          description: description.trim(),
+          amount: totalAmount,
+        };
+
+        if (splitMode === 'equal') {
+          payload.type = 'equal';
+        } else if (splitMode === 'equal_selected') {
+          const selectedUsernames = participants
+            .filter((p) => p.selected)
+            .map((p) => p.username);
+          if (selectedUsernames.length === 0) {
+            Alert.alert('Error', 'Please select at least one participant');
+            setIsLoading(false);
+            return;
+          }
+          payload.type = 'equal_selected';
+          payload.members = selectedUsernames;
+        } else if (splitMode === 'custom') {
+          const splits = participants
+            .filter((p) => p.amount > 0)
+            .map((p) => ({
+              username: p.username,
+              shareAmount: p.amount,
+            }));
+
+          const sum = splits.reduce((acc, s) => acc + s.shareAmount, 0);
+          if (Math.abs(sum - totalAmount) > 0.01) {
+            Alert.alert('Error', `Split amounts must sum to $${totalAmount.toFixed(2)}`);
+            setIsLoading(false);
+            return;
+          }
+
+          payload.type = 'custom';
+          payload.splits = splits;
         }
 
-        payload.type = 'custom';
-        payload.splits = splits;
+        await createExpense.mutateAsync({ tripId, data: payload });
       }
-
-      await createExpense.mutateAsync({ tripId, data: payload });
       navigation.goBack();
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to create expense');
+      Alert.alert('Error', error.message || `Failed to ${isEditMode ? 'update' : 'create'} expense`);
     } finally {
       setIsLoading(false);
     }
@@ -327,21 +452,23 @@ export default function AddExpenseScreen() {
     >
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.content}>
-          <TouchableOpacity
-            style={styles.scanButton}
-            onPress={handleScanReceipt}
-            disabled={isScanning}
-            activeOpacity={0.8}
-          >
-            {isScanning ? (
-              <ActivityIndicator color={colors.primary} />
-            ) : (
-              <>
-                <Ionicons name="camera" size={20} color={colors.primary} />
-                <Text style={styles.scanButtonText}>Scan Receipt</Text>
-              </>
-            )}
-          </TouchableOpacity>
+          {!isEditMode && (
+            <TouchableOpacity
+              style={styles.scanButton}
+              onPress={handleScanReceipt}
+              disabled={isScanning}
+              activeOpacity={0.8}
+            >
+              {isScanning ? (
+                <ActivityIndicator color={colors.primary} />
+              ) : (
+                <>
+                  <Ionicons name="camera" size={20} color={colors.primary} />
+                  <Text style={styles.scanButtonText}>Scan Receipt</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
 
           <Text style={styles.label}>Description *</Text>
           <TextInput
@@ -440,7 +567,9 @@ export default function AddExpenseScreen() {
             {isLoading ? (
               <ActivityIndicator color={colors.surface} />
             ) : (
-              <Text style={styles.saveButtonText}>Save Expense</Text>
+              <Text style={styles.saveButtonText}>
+                {isEditMode ? 'Update Expense' : 'Save Expense'}
+              </Text>
             )}
           </TouchableOpacity>
         </View>

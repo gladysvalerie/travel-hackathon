@@ -107,6 +107,9 @@ export interface CreateExpenseRequest {
 export interface UpdateExpenseRequest {
   description: string;
   amount: number;
+  type: "equal" | "equal_selected" | "custom";
+  members?: string[]; // for equal_selected
+  splits?: Array<{ username: string; shareAmount: number }>; // for custom
 }
 
 export interface ParsedReceiptData {

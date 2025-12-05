@@ -175,33 +175,6 @@ npm start
 
 ---
 
-## 📁 Project Structure
-
-```
-travel-hackathon/
-├── backend/                 # Node.js/Express API
-│   ├── prisma/            # Database schema and migrations
-│   ├── src/
-│   │   ├── config/        # Database and Prisma setup
-│   │   ├── controllers/   # Request handlers
-│   │   ├── routes/        # API routes
-│   │   ├── services/      # Business logic
-│   │   └── middleware/    # Auth middleware
-│   └── .env               # Backend environment variables
-│
-├── mobile/                 # React Native (Expo) app
-│   ├── src/
-│   │   ├── api/          # API client
-│   │   ├── screens/      # Screen components
-│   │   ├── components/  # Reusable components
-│   │   └── services/     # Business logic (receipt parser)
-│   └── .env              # Mobile environment variables
-│
-└── HOW_TO_RUN.md         # This file
-```
-
----
-
 ## 🎯 Quick Start Commands
 
 **Terminal 1 - Backend:**

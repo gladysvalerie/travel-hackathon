@@ -133,9 +133,10 @@ export async function getExpenseById(userId, expenseId) {
   return expense;
 }
 
-export async function updateExpense(userId, expenseId, description, amount) {
+export async function updateExpense(userId, expenseId, description, amount, type, splitsInput, membersSelected) {
   const expense = await prisma.expense.findUnique({
-    where: { id: expenseId }
+    where: { id: expenseId },
+    include: { splits: { include: { user: true } } }
   });
 
   if (!expense) throw new Error("Expense not found.");
@@ -144,12 +145,57 @@ export async function updateExpense(userId, expenseId, description, amount) {
   if (expense.paidBy !== userId)
     throw new Error("Only the payer can update this expense.");
 
-  // Recalculate shares for all members
-  const members = await prisma.tripMember.findMany({
-    where: { tripId: expense.tripId }
+  await ensureUserInTrip(userId, expense.tripId);
+
+  // fetch all members
+  const allMembers = await prisma.tripMember.findMany({
+    where: { tripId: expense.tripId },
+    include: { user: true }
   });
 
-  const share = amount / members.length;
+  let finalSplits = [];
+
+  if (type === "equal") {
+    // equal among all
+    const share = amount / allMembers.length;
+    finalSplits = allMembers.map(m => ({
+      userId: m.userId,
+      shareAmount: share
+    }));
+  }
+
+  else if (type === "equal_selected") {
+    // equal among selected members only
+    const users = await ensureUsersInTrip(membersSelected, expense.tripId);
+    const share = amount / users.length;
+
+    finalSplits = users.map(u => ({
+      userId: u.id,
+      shareAmount: share
+    }));
+  }
+
+  else if (type === "custom") {
+    // arbitrary amounts per selected user
+    const usernames = splitsInput.map(s => s.username);
+    const users = await ensureUsersInTrip(usernames, expense.tripId);
+
+    finalSplits = splitsInput.map(s => {
+      const user = users.find(u => u.username === s.username);
+      return {
+        userId: user.id,
+        shareAmount: s.shareAmount
+      };
+    });
+
+    const sum = finalSplits.reduce((acc, x) => acc + x.shareAmount, 0);
+    if (Math.abs(sum - amount) > 0.0001)
+      throw new Error("Split amounts must sum exactly to total expense.");
+  }
+
+  else {
+    throw new Error("Invalid split type.");
+  }
 
   // Update expense + replace all splits
   return prisma.expense.update({
@@ -159,13 +205,14 @@ export async function updateExpense(userId, expenseId, description, amount) {
       amount,
       splits: {
         deleteMany: {}, // remove old splits
-        create: members.map(m => ({
-          userId: m.userId,
-          shareAmount: share
-        }))
+        create: finalSplits
       }
     },
-    include: { splits: true }
+    include: {
+      splits: {
+        include: { user: true }
+      }
+    }
   });
 }
 

@@ -92,7 +92,16 @@ export default function TripExpensesScreen() {
       <FlatList
         data={allExpenses}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <ExpenseCard expense={item} />}
+        renderItem={({ item }) => (
+          <ExpenseCard
+            expense={item}
+            onPress={
+              user && item.paidBy === user.id
+                ? () => navigation.navigate('AddExpense', { tripId, expenseId: item.id })
+                : undefined
+            }
+          />
+        )}
         contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl

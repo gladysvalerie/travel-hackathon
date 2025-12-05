@@ -3,12 +3,14 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { TabNavigator } from './TabNavigator';
 import TripDetailScreen from '../screens/trips/TripDetailScreen';
 import AddExpenseScreen from '../screens/expenses/AddExpenseScreen';
+import ReceiptItemsScreen from '../screens/expenses/ReceiptItemsScreen';
 import { colors } from '../theme/colors';
 
 export type MainStackParamList = {
   MainTabs: undefined;
   TripDetail: { tripId: string };
-  AddExpense: { tripId: string; initialParsedData?: any };
+  AddExpense: { tripId: string; initialParsedData?: any; expenseId?: string };
+  ReceiptItems: { tripId: string; receiptData: any };
 };
 
 const Stack = createStackNavigator<MainStackParamList>();
@@ -39,7 +41,14 @@ export const MainNavigator: React.FC = () => {
       <Stack.Screen
         name="AddExpense"
         component={AddExpenseScreen}
-        options={{ title: 'Add Expense' }}
+        options={({ route }) => ({ 
+          title: route.params?.expenseId ? 'Edit Expense' : 'Add Expense' 
+        })}
+      />
+      <Stack.Screen
+        name="ReceiptItems"
+        component={ReceiptItemsScreen}
+        options={{ title: 'Receipt Items' }}
       />
     </Stack.Navigator>
   );

@@ -33,6 +33,8 @@ export const useUpdateExpense = () => {
     onSuccess: (expense) => {
       queryClient.invalidateQueries({ queryKey: ['expenses', expense.tripId] });
       queryClient.invalidateQueries({ queryKey: ['settlement', expense.tripId] });
+      queryClient.invalidateQueries({ queryKey: ['trip', expense.tripId] });
+      queryClient.invalidateQueries({ queryKey: ['expense', expense.id] });
     },
   });
 };
